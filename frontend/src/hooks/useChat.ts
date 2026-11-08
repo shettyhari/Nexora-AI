@@ -120,6 +120,21 @@ export function useChat(initialConversationId?: string) {
           attachment_ids: attachmentIds,
         },
         (chunk: StreamEvent) => {
+          if (chunk.resolved_model || chunk.routing_reason || chunk.citations) {
+            setMessages((prev) =>
+              prev.map((m) =>
+                m.id === tempAsstMsgId
+                  ? {
+                      ...m,
+                      model: chunk.resolved_model || m.model,
+                      routing_reason: chunk.routing_reason || m.routing_reason,
+                      citations: chunk.citations || m.citations,
+                    }
+                  : m
+              )
+            );
+          }
+
           if (chunk.type === "start" && chunk.conversation_id) {
             resolvedConversationId = chunk.conversation_id;
             if (!activeConversation) {
@@ -218,6 +233,21 @@ export function useChat(initialConversationId?: string) {
       await api.regenerateMessage(
         messageId,
         (chunk: StreamEvent) => {
+          if (chunk.resolved_model || chunk.routing_reason || chunk.citations) {
+            setMessages((prev) =>
+              prev.map((m) =>
+                m.id === messageId
+                  ? {
+                      ...m,
+                      model: chunk.resolved_model || m.model,
+                      routing_reason: chunk.routing_reason || m.routing_reason,
+                      citations: chunk.citations || m.citations,
+                    }
+                  : m
+              )
+            );
+          }
+
           if (chunk.type === "reasoning") {
             setMessages((prev) =>
               prev.map((m) =>
@@ -323,3 +353,4 @@ export function useChat(initialConversationId?: string) {
     loadConversation,
   };
 }
+

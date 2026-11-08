@@ -105,3 +105,4 @@ export const OnboardingModal: React.FC = () => {
     </div>
   );
 };
+

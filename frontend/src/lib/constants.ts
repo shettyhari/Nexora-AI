@@ -36,3 +36,4 @@ export const KEYBOARD_SHORTCUTS = [
   { key: "Ctrl / ⌘ + /", description: "Toggle keyboard shortcuts dialog" },
   { key: "Escape", description: "Close modals / cancel editing" }
 ];
+

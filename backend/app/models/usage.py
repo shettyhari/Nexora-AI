@@ -54,3 +54,4 @@ class UsageRecord(Base):
     __table_args__ = (
         Index("ix_usage_user_created", "user_id", "created_at"),
     )
+

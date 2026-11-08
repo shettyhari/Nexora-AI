@@ -40,6 +40,8 @@ class Message(Base):
     content: Mapped[str] = mapped_column(Text, nullable=False)
     reasoning_content: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     model: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
+    routing_reason: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    citations_json: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     tokens_used: Mapped[int] = mapped_column(Integer, default=0)
     is_edited: Mapped[bool] = mapped_column(Boolean, default=False)
     error: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
@@ -71,3 +73,4 @@ class Message(Base):
     __table_args__ = (
         Index("ix_messages_conv_created", "conversation_id", "created_at"),
     )
+

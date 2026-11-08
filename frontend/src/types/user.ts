@@ -29,3 +29,4 @@ export interface User {
   profile?: Profile | null;
   preferences?: UserPreference | null;
 }
+

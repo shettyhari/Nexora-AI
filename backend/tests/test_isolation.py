@@ -38,3 +38,4 @@ async def test_tenant_data_isolation(client, auth_headers, auth_headers_user_2):
     u1_verify = await client.get(f"/api/v1/conversations/{u1_conv_id}", headers=auth_headers)
     assert u1_verify.status_code == 200
     assert u1_verify.json()["id"] == u1_conv_id
+

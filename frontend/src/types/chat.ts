@@ -24,6 +24,8 @@ export interface Message {
   content: string;
   reasoning_content?: string | null;
   model?: string | null;
+  routing_reason?: string | null;
+  citations?: Array<{ id: number; source_title: string; chunk_index: number; content_snippet: string }> | null;
   tokens_used: number;
   is_edited: boolean;
   error?: string | null;
@@ -70,13 +72,17 @@ export interface ModelConfig {
 }
 
 export interface StreamEvent {
-  type: "start" | "token" | "reasoning" | "search_status" | "usage" | "done" | "error";
+  type: "start" | "token" | "reasoning" | "search_status" | "usage" | "routing" | "done" | "error";
   content?: string;
   message_id?: string;
   conversation_id?: string;
+  resolved_model?: string;
+  routing_reason?: string;
+  citations?: Array<{ id: number; source_title: string; chunk_index: number; content_snippet: string }>;
   usage?: {
     prompt_tokens: number;
     completion_tokens: number;
     total_tokens: number;
   };
 }
+

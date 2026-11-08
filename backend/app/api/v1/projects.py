@@ -101,3 +101,4 @@ async def delete_project(
     await db.delete(proj)
     await db.commit()
     return MessageResponse(message="Project deleted successfully")
+

@@ -3,7 +3,7 @@ from datetime import datetime, timezone
 import json
 import logging
 import time
-from typing import AsyncGenerator, Optional
+from typing import Any, AsyncGenerator, List, Optional
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from fastapi.responses import StreamingResponse
 from sqlalchemy import select
@@ -25,8 +25,9 @@ from app.schemas.message import (
     MessageResponse
 )
 from app.services.llm.base import LLMMessage
-from app.services.llm.factory import LLMFactory
-from app.services.search_service import SearchService
+from app.services.memory.memory_service import memory_service
+from app.services.model_registry.registry import model_registry
+from app.services.reasoning.orchestrator import reasoning_orchestrator
 
 router = APIRouter(prefix="/messages", tags=["Messages"])
 logger = logging.getLogger(__name__)
@@ -40,7 +41,8 @@ async def generate_chat_stream(
     model_name: str,
     reasoning_mode: bool,
     web_search: bool,
-    user_prompt: str
+    user_prompt: str,
+    attachment_ids: Optional[List[str]] = None
 ) -> AsyncGenerator[str, None]:
     """Stream AI tokens, update database on finish, and yield SSE."""
     start_time = time.time()
@@ -48,12 +50,15 @@ async def generate_chat_stream(
     accumulated_reasoning = []
     tokens_prompt = 0
     tokens_completion = 0
+    resolved_model = model_name
+    routing_reason = ""
+    citations_data: List[Dict[str, Any]] = []
 
     # Yield initial start event
     yield f"data: {json.dumps({'type': 'start', 'message_id': assistant_message_id, 'conversation_id': conversation_id})}\n\n"
 
     try:
-        # 1. Fetch conversation history inside a new isolated session
+        # 1. Fetch conversation history and attachments inside isolated session
         async with AsyncSessionLocal() as session:
             conv_q = select(Conversation).where(
                 Conversation.id == conversation_id,
@@ -61,65 +66,89 @@ async def generate_chat_stream(
             )
             conv_res = await session.execute(conv_q)
             conv = conv_res.scalar_one_or_none()
-            system_prompt = conv.system_prompt if conv else None
+            project_id = conv.project_id if conv else None
 
             # Fetch recent messages
             msgs_q = (
                 select(Message)
                 .where(
                     Message.conversation_id == conversation_id,
-                    Message.id != assistant_message_id
+                    Message.id != assistant_message_id,
+                    Message.id != user_message_id
                 )
                 .order_by(Message.created_at.asc())
             )
             msgs_res = await session.execute(msgs_q)
             db_messages = msgs_res.scalars().all()
 
-        # 2. Build LLM message list
-        llm_messages = []
+            # Fetch attachments
+            attachments_objs = []
+            if attachment_ids:
+                att_q = select(Attachment).where(Attachment.id.in_(attachment_ids))
+                att_res = await session.execute(att_q)
+                attachments_objs = list(att_res.scalars().all())
+
+        # 2. Build LLM message list for prior history
+        history_llm = []
         for msg in db_messages:
-            llm_messages.append(LLMMessage(role=msg.role, content=msg.content))
+            history_llm.append(LLMMessage(
+                role=msg.role,
+                content=msg.content,
+                reasoning_content=msg.reasoning_content
+            ))
 
-        # 3. Handle Web Search if requested
-        if web_search:
-            yield f"data: {json.dumps({'type': 'search_status', 'content': 'Searching the web for latest context...'})}\n\n"
-            search_results = await SearchService.search(user_prompt)
-            if search_results:
-                search_ctx = SearchService.format_search_context(search_results)
-                if system_prompt:
-                    system_prompt += f"\n\n{search_ctx}"
-                else:
-                    system_prompt = f"You have access to current web context:\n\n{search_ctx}"
-
-        # 4. Invoke LLM provider
-        provider = LLMFactory.get_provider(model_name)
-
-        async for chunk in provider.stream_chat(
-            messages=llm_messages,
-            model=model_name,
-            system_prompt=system_prompt,
-            reasoning_mode=reasoning_mode
+        # 3. Execute 8-stage Advanced Reasoning Flow
+        async for chunk in reasoning_orchestrator.execute_reasoning_flow(
+            db=session,
+            user_id=user_id,
+            prompt=user_prompt,
+            conversation_history=history_llm,
+            requested_model_id=model_name,
+            reasoning_mode=reasoning_mode,
+            web_search=web_search,
+            project_id=project_id,
+            attachments=attachments_objs
         ):
+            if chunk.resolved_model:
+                resolved_model = chunk.resolved_model
+            if chunk.routing_reason:
+                routing_reason = chunk.routing_reason
+            if chunk.citations:
+                citations_data = chunk.citations
+
             if chunk.type == "token":
                 accumulated_content.append(chunk.content)
-                yield f"data: {json.dumps({'type': 'token', 'content': chunk.content})}\n\n"
+                yield f"data: {json.dumps({'type': 'token', 'content': chunk.content, 'resolved_model': resolved_model})}\n\n"
+
             elif chunk.type == "reasoning":
                 accumulated_reasoning.append(chunk.content)
-                yield f"data: {json.dumps({'type': 'reasoning', 'content': chunk.content})}\n\n"
-            elif chunk.type == "usage" and chunk.usage:
-                tokens_prompt = chunk.usage.prompt_tokens
-                tokens_completion = chunk.usage.completion_tokens
-                yield f"data: {json.dumps({'type': 'usage', 'usage': chunk.usage.model_dump()})}\n\n"
+                yield f"data: {json.dumps({'type': 'reasoning', 'content': chunk.content, 'resolved_model': resolved_model})}\n\n"
+
+            elif chunk.type == "usage":
+                # Metadata / Router notification
+                payload = {
+                    "type": "routing",
+                    "resolved_model": resolved_model,
+                    "routing_reason": routing_reason
+                }
+                if citations_data:
+                    payload["citations"] = citations_data
+                yield f"data: {json.dumps(payload)}\n\n"
+
             elif chunk.type == "error":
                 yield f"data: {json.dumps({'type': 'error', 'content': chunk.content})}\n\n"
+
             elif chunk.type == "done":
+                if chunk.usage:
+                    tokens_prompt = chunk.usage.prompt_tokens
+                    tokens_completion = chunk.usage.completion_tokens
                 break
 
     except Exception as e:
         logger.exception("Error during LLM streaming")
         yield f"data: {json.dumps({'type': 'error', 'content': f'Streaming interrupted: {str(e)}'})}\n\n"
 
-    # 5. Persist assistant message and usage in database
+    # 4. Persist assistant message, routing metadata, citations, and usage
     latency_ms = int((time.time() - start_time) * 1000)
     full_content = "".join(accumulated_content)
     full_reasoning = "".join(accumulated_reasoning) if accumulated_reasoning else None
@@ -131,6 +160,10 @@ async def generate_chat_stream(
             if asst_msg:
                 asst_msg.content = full_content or "No response generated."
                 asst_msg.reasoning_content = full_reasoning
+                asst_msg.model = resolved_model
+                asst_msg.routing_reason = routing_reason
+                if citations_data:
+                    asst_msg.citations_json = json.dumps(citations_data)
                 asst_msg.tokens_used = tokens_prompt + tokens_completion
                 asst_msg.updated_at = datetime.now(timezone.utc)
 
@@ -139,7 +172,6 @@ async def generate_chat_stream(
             if conv:
                 conv.updated_at = datetime.now(timezone.utc)
                 if conv.title == "New Chat":
-                    # Generate a concise title from user prompt
                     clean_title = user_prompt.strip().replace("\n", " ")
                     conv.title = (clean_title[:36] + "...") if len(clean_title) > 36 else clean_title
 
@@ -148,7 +180,7 @@ async def generate_chat_stream(
                 user_id=user_id,
                 conversation_id=conversation_id,
                 message_id=assistant_message_id,
-                model=model_name,
+                model=resolved_model,
                 prompt_tokens=tokens_prompt,
                 completion_tokens=tokens_completion,
                 total_tokens=tokens_prompt + tokens_completion,
@@ -156,10 +188,26 @@ async def generate_chat_stream(
             )
             session.add(usage)
             await session.commit()
+
+            # Automatic memory extraction: check if user expressed an explicit preference
+            prompt_lower = user_prompt.lower()
+            if any(p in prompt_lower for p in ["i prefer", "remember that", "my name is", "i work as", "always use", "never use"]):
+                try:
+                    await memory_service.store_memory(
+                        db=session,
+                        user_id=user_id,
+                        content=user_prompt.strip(),
+                        memory_type="user_preference",
+                        category="preference",
+                        conversation_id=conversation_id
+                    )
+                except Exception as mem_err:
+                    logger.debug(f"Auto-memory store skip: {mem_err}")
+
     except Exception as e:
         logger.error(f"Failed to persist stream output: {e}")
 
-    yield f"data: {json.dumps({'type': 'done', 'finish_reason': 'stop'})}\n\n"
+    yield f"data: {json.dumps({'type': 'done', 'finish_reason': 'stop', 'resolved_model': resolved_model, 'citations': citations_data})}\n\n"
 
 
 @router.post("", response_class=StreamingResponse)
@@ -245,7 +293,8 @@ async def send_message(
             model_name=model_name,
             reasoning_mode=reasoning_mode,
             web_search=web_search,
-            user_prompt=data.content
+            user_prompt=data.content,
+            attachment_ids=data.attachment_ids
         ),
         media_type="text/event-stream",
         headers={
@@ -309,7 +358,6 @@ async def regenerate_message(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Conversation not found")
 
     if target_msg.role == "assistant":
-        # Find the preceding user message
         user_msg_q = (
             select(Message)
             .where(
@@ -325,7 +373,6 @@ async def regenerate_message(
         asst_msg = target_msg
     else:
         user_msg = target_msg
-        # Create a new assistant response or find child
         asst_msg = Message(
             conversation_id=conversation_id,
             user_id=current_user.id,

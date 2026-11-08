@@ -59,3 +59,4 @@ async def test_update_conversation_pin_and_archive(client, auth_headers):
     # Ensure 404 after deletion
     get_resp = await client.get(f"/api/v1/conversations/{conv_id}", headers=auth_headers)
     assert get_resp.status_code == 404
+

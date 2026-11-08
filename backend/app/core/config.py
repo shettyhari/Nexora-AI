@@ -49,13 +49,27 @@ class Settings(BaseSettings):
         "pdf", "txt", "md", "csv", "json", "py", "ts", "tsx", "js"
     ]
 
-    # AI Provider Keys
+    # AI Provider Keys & Gateway
     GEMINI_API_KEY: str = ""
     OPENAI_API_KEY: str = ""
     ANTHROPIC_API_KEY: str = ""
     GROQ_API_KEY: str = ""
+    HUGGINGFACE_API_KEY: str = ""
+    HUGGINGFACE_ENDPOINT_URL: str = ""
+    OPENAI_COMPATIBLE_BASE_URL: str = ""
+    OPENAI_COMPATIBLE_API_KEY: str = ""
     DEFAULT_LLM_PROVIDER: str = "gemini"
-    DEFAULT_MODEL_ID: str = "nexora-pro"
+    DEFAULT_MODEL_ID: str = "nexora-auto"
+
+    # Intelligence Engine Settings
+    ENABLE_INTELLIGENT_ROUTING: bool = True
+    ENABLE_MEMORY: bool = True
+    ENABLE_RAG: bool = True
+    EMBEDDING_PROVIDER: str = "auto"  # "auto", "openai", "gemini", "local"
+    EMBEDDING_MODEL: str = "text-embedding-3-small"
+    VECTOR_DIMENSION: int = 384
+    MAX_CONTEXT_TOKENS: int = 128000
+    OUTPUT_RESERVE_TOKENS: int = 4096
 
     # Web search
     TAVILY_API_KEY: str = ""
@@ -73,3 +87,4 @@ class Settings(BaseSettings):
 
 
 settings = Settings()
+

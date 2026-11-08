@@ -43,3 +43,4 @@ class UserPreference(Base):
     )
 
     user: Mapped["User"] = relationship("User", back_populates="preferences")
+

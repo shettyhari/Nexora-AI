@@ -77,3 +77,4 @@ class Conversation(Base):
         Index("ix_conversations_user_archived", "user_id", "is_archived"),
         Index("ix_conversations_user_pinned", "user_id", "is_pinned"),
     )
+

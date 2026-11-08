@@ -43,3 +43,4 @@ export const ThinkingBlock: React.FC<ThinkingBlockProps> = ({ reasoning, isStrea
     </div>
   );
 };
+

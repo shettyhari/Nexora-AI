@@ -82,3 +82,7 @@ class SearchService:
         for idx, r in enumerate(results, 1):
             context_parts.append(f"{idx}. {r.title} ({r.url}):\n{r.snippet}")
         return "\n\n".join(context_parts)
+
+
+search_service = SearchService()
+

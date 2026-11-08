@@ -348,6 +348,57 @@ class ApiClient {
     return this.request<ModelConfig[]>("/models");
   }
 
+  // --- Memories ---
+  async listMemories(category?: string, project_id?: string) {
+    const params = new URLSearchParams();
+    if (category) params.append("category", category);
+    if (project_id) params.append("project_id", project_id);
+    return this.request<any[]>(`/memories?${params.toString()}`);
+  }
+
+  async createMemory(content: string, memory_type = "long_term", category = "fact") {
+    return this.request<any>("/memories", {
+      method: "POST",
+      body: JSON.stringify({ content, memory_type, category }),
+    });
+  }
+
+  async deleteMemory(memoryId: string) {
+    return this.request<{ message: string }>(`/memories/${memoryId}`, { method: "DELETE" });
+  }
+
+  // --- RAG Knowledge Base ---
+  async listRAGCollections(project_id?: string) {
+    const params = project_id ? `?project_id=${project_id}` : "";
+    return this.request<any[]>(`/rag/collections${params}`);
+  }
+
+  async createRAGCollection(name: string, description?: string) {
+    return this.request<any>("/rag/collections", {
+      method: "POST",
+      body: JSON.stringify({ name, description }),
+    });
+  }
+
+  async ingestRAGDocument(collectionId: string, title: string, content: string) {
+    return this.request<any>(`/rag/collections/${collectionId}/documents`, {
+      method: "POST",
+      body: JSON.stringify({ title, content }),
+    });
+  }
+
+  // --- Router & Gateway Health ---
+  async evaluateRoute(prompt: string, requested_model_id = "nexora-auto") {
+    return this.request<any>("/router/evaluate", {
+      method: "POST",
+      body: JSON.stringify({ prompt, requested_model_id }),
+    });
+  }
+
+  async getGatewayHealth() {
+    return this.request<Record<string, any>>("/gateway/health");
+  }
+
   // --- Attachments ---
   async uploadAttachment(file: File): Promise<Attachment> {
     const url = `${API_BASE}${API_PREFIX}/attachments/upload`;
@@ -377,3 +428,4 @@ class ApiClient {
 }
 
 export const api = new ApiClient();
+

@@ -1,92 +1,96 @@
-from typing import List
+from typing import Any, Dict, List
 from fastapi import APIRouter, Depends
-from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
-
 from app.api.deps import get_current_user
 from app.core.database import get_db
-from app.models.model_config import ModelConfiguration
 from app.models.user import User
-from app.schemas.model_config import ModelConfigResponse
+from app.services.model_registry.registry import model_registry
 
 router = APIRouter(prefix="/models", tags=["Models"])
 
-# Default seeded model catalog
+# Seeded model catalog from ModelRegistry
 DEFAULT_MODELS = [
     {
-        "id": "model_nexora_pro",
-        "model_key": "nexora-pro",
-        "display_name": "NEXORA Pro 2.5",
-        "provider": "gemini",
-        "model_name": "gemini-1.5-pro",
-        "context_window": 1000000,
-        "max_tokens": 8192,
-        "supports_vision": True,
-        "supports_reasoning": True,
+        "id": m.id,
+        "model_key": m.id,
+        "display_name": m.name,
+        "provider": m.provider.value,
+        "model_name": m.id,
+        "context_window": m.context_window,
+        "max_tokens": m.max_output_tokens,
+        "supports_vision": m.capabilities.vision,
+        "supports_reasoning": m.capabilities.reasoning,
         "is_enabled": True,
-        "is_default": True,
-        "badge": "Flagship",
-        "description": "Most intelligent general model for complex tasks, deep coding, and multimodal synthesis."
-    },
-    {
-        "id": "model_nexora_flash",
-        "model_key": "nexora-flash",
-        "display_name": "NEXORA Flash 2.5",
-        "provider": "gemini",
-        "model_name": "gemini-1.5-flash",
-        "context_window": 1000000,
-        "max_tokens": 8192,
-        "supports_vision": True,
-        "supports_reasoning": False,
-        "is_enabled": True,
-        "is_default": False,
-        "badge": "Fast",
-        "description": "Ultra-fast response latency with expansive context window for rapid everyday tasks."
-    },
-    {
-        "id": "model_gpt4o",
-        "model_key": "gpt-4o",
-        "display_name": "GPT-4o Omnimodal",
-        "provider": "openai",
-        "model_name": "gpt-4o",
-        "context_window": 128000,
-        "max_tokens": 4096,
-        "supports_vision": True,
-        "supports_reasoning": True,
-        "is_enabled": True,
-        "is_default": False,
-        "badge": "OpenAI",
-        "description": "High-intelligence flagship model with cross-domain reasoning and vision capabilities."
-    },
-    {
-        "id": "model_claude35",
-        "model_key": "claude-3-5-sonnet",
-        "display_name": "Claude 3.5 Sonnet",
-        "provider": "anthropic",
-        "model_name": "claude-3-5-sonnet-20241022",
-        "context_window": 200000,
-        "max_tokens": 8192,
-        "supports_vision": True,
-        "supports_reasoning": True,
-        "is_enabled": True,
-        "is_default": False,
-        "badge": "Anthropic",
-        "description": "Leading standard for code generation, nuanced reasoning, and architectural design."
+        "is_default": m.is_default,
+        "badge": "Auto" if m.id == "nexora-auto" else ("Flagship" if "flagship" in m.id else m.provider.value.capitalize()),
+        "description": m.description
     }
+    for m in model_registry.list_models()
 ]
 
 
-@router.get("", response_model=List[ModelConfigResponse])
-async def list_available_models(
+@router.get("", response_model=List[Dict[str, Any]])
+async def list_models(
+    current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db)
 ):
-    """List available AI models in the NEXORA catalog."""
-    query = select(ModelConfiguration).where(ModelConfiguration.is_enabled == True)
-    result = await db.execute(query)
-    models = result.scalars().all()
+    """
+    Get all active models dynamically from the backend Model Registry.
+    Includes context window, capabilities, pricing, and availability.
+    """
+    models = model_registry.list_models(include_inactive=False)
+    output = []
+    for m in models:
+        output.append({
+            "id": m.id,
+            "model_key": m.id,
+            "display_name": m.name,
+            "name": m.name,
+            "provider": m.provider.value,
+            "version": m.version,
+            "description": m.description,
+            "context_window": m.context_window,
+            "max_tokens": m.max_output_tokens,
+            "supports_vision": m.capabilities.vision,
+            "supports_reasoning": m.capabilities.reasoning,
+            "supports_tools": m.capabilities.function_calling,
+            "is_default": m.is_default,
+            "is_enabled": True,
+            "pricing": {
+                "input_per_million": m.pricing.input_per_million,
+                "output_per_million": m.pricing.output_per_million
+            },
+            "deployment": m.deployment.value,
+            "status": m.status.value,
+            "recommended_intents": m.recommended_intents
+        })
+    return output
 
-    if not models:
-        # Return default preset catalog
-        return [ModelConfigResponse(**m) for m in DEFAULT_MODELS]
 
-    return models
+@router.get("/{model_id}", response_model=Dict[str, Any])
+async def get_model_details(
+    model_id: str,
+    current_user: User = Depends(get_current_user)
+):
+    """Get complete metadata, capabilities, and pricing for a specific model."""
+    desc = model_registry.get_model(model_id)
+    if not desc:
+        from fastapi import HTTPException
+        raise HTTPException(status_code=404, detail=f"Model '{model_id}' not found in registry")
+
+    return {
+        "id": desc.id,
+        "name": desc.name,
+        "provider": desc.provider.value,
+        "version": desc.version,
+        "description": desc.description,
+        "capabilities": desc.capabilities.model_dump(),
+        "context_window": desc.context_window,
+        "max_output_tokens": desc.max_output_tokens,
+        "supported_modalities": desc.supported_modalities,
+        "pricing": desc.pricing.model_dump(),
+        "deployment": desc.deployment.value,
+        "status": desc.status.value,
+        "is_default": desc.is_default,
+        "recommended_intents": desc.recommended_intents
+    }

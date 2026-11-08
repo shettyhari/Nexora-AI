@@ -78,3 +78,4 @@ async def test_message_feedback(client, auth_headers):
     assert fb_resp.status_code == 200
     assert fb_resp.json()["rating"] == "like"
     assert fb_resp.json()["comment"] == "Great structured response"
+

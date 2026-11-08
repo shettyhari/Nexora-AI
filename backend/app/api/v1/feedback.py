@@ -73,3 +73,4 @@ async def delete_message_feedback(
     await db.delete(feedback)
     await db.commit()
     return SimpleResponse(message="Feedback removed")
+

@@ -43,3 +43,4 @@ class Feedback(Base):
     __table_args__ = (
         Index("ix_feedback_msg_user", "message_id", "user_id"),
     )
+

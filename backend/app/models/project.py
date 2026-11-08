@@ -40,3 +40,4 @@ class Project(Base):
 
     user: Mapped["User"] = relationship("User", back_populates="projects")
     conversations: Mapped[List["Conversation"]] = relationship("Conversation", back_populates="project")
+

@@ -28,3 +28,4 @@ export const NexoraWordmark: React.FC<NexoraWordmarkProps> = ({
     </div>
   );
 };
+

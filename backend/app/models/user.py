@@ -85,3 +85,4 @@ class User(Base):
         back_populates="user",
         cascade="all, delete-orphan"
     )
+

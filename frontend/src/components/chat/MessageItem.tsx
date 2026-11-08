@@ -14,6 +14,8 @@ import {
   Edit2,
   FileText,
   User as UserIcon,
+  BookOpen,
+  Cpu,
 } from "lucide-react";
 import { copyToClipboard } from "@/lib/utils";
 
@@ -84,9 +86,20 @@ export const MessageItem: React.FC<MessageItemProps> = ({
         {/* Message Content Container */}
         <div className="flex-1 min-w-0">
           <div className="flex items-center justify-between mb-1">
-            <span className="font-semibold text-xs text-slate-900 dark:text-slate-200">
-              {isUser ? "You" : "NEXORA"}
-            </span>
+            <div className="flex items-center gap-2">
+              <span className="font-semibold text-xs text-slate-900 dark:text-slate-200">
+                {isUser ? "You" : "NEXORA"}
+              </span>
+              {!isUser && message.model && (
+                <span
+                  title={message.routing_reason || `Responding via ${message.model}`}
+                  className="px-2 py-0.5 rounded-full bg-cyan-500/10 text-cyan-600 dark:text-cyan-400 text-[10px] font-medium border border-cyan-500/20 flex items-center gap-1 cursor-default"
+                >
+                  <Cpu className="w-2.5 h-2.5 text-cyan-500" />
+                  <span>{message.model}</span>
+                </span>
+              )}
+            </div>
             {message.tokens_used > 0 && !isUser && (
               <span className="text-[10px] text-slate-400 font-mono">
                 {message.tokens_used} tokens
@@ -141,6 +154,26 @@ export const MessageItem: React.FC<MessageItemProps> = ({
             </div>
           ) : (
             <MarkdownRenderer content={message.content} isStreaming={isStreaming} />
+          )}
+
+          {/* Citations Preview */}
+          {!isUser && message.citations && message.citations.length > 0 && (
+            <div className="mt-3 pt-2.5 border-t border-slate-200/50 dark:border-slate-800/60">
+              <div className="text-[11px] font-semibold text-slate-500 dark:text-slate-400 mb-1.5 flex items-center gap-1">
+                <BookOpen className="w-3 h-3 text-cyan-500" /> Grounded Knowledge Sources:
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5">
+                {message.citations.map((c) => (
+                  <div
+                    key={c.id}
+                    className="p-2 rounded-lg bg-slate-100/70 dark:bg-slate-800/40 text-[11px] text-slate-700 dark:text-slate-300 border border-slate-200/50 dark:border-slate-700/50"
+                  >
+                    <span className="font-semibold text-cyan-500">[{c.id}]</span> {c.source_title}
+                    <div className="text-[10px] text-slate-400 truncate mt-0.5">{c.content_snippet}</div>
+                  </div>
+                ))}
+              </div>
+            </div>
           )}
 
           {/* Edited indicator */}
@@ -215,3 +248,4 @@ export const MessageItem: React.FC<MessageItemProps> = ({
     </div>
   );
 };
+

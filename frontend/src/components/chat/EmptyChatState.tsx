@@ -59,3 +59,4 @@ export const EmptyChatState: React.FC<EmptyChatStateProps> = ({ onSelectPrompt }
     </div>
   );
 };
+

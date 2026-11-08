@@ -9,6 +9,8 @@ from app.models.model_config import ModelConfiguration
 from app.models.usage import UsageRecord
 from app.models.feedback import Feedback
 from app.models.audit import AuditLog
+from app.models.memory import Memory
+from app.models.rag import KnowledgeCollection, KnowledgeDocument, DocumentChunk
 
 __all__ = [
     "User",
@@ -21,5 +23,10 @@ __all__ = [
     "ModelConfiguration",
     "UsageRecord",
     "Feedback",
-    "AuditLog"
+    "AuditLog",
+    "Memory",
+    "KnowledgeCollection",
+    "KnowledgeDocument",
+    "DocumentChunk",
 ]
+

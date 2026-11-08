@@ -38,3 +38,4 @@ export const ThemeToggle: React.FC<{ className?: string }> = ({ className = "" }
     </button>
   );
 };
+

@@ -106,3 +106,4 @@ def verify_action_token(token: str, expected_action: str) -> Optional[str]:
         return payload.get("sub")
     except jwt.PyJWTError:
         return None
+

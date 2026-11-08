@@ -41,3 +41,4 @@ class AuditLog(Base):
     __table_args__ = (
         Index("ix_audit_action_created", "action", "created_at"),
     )
+

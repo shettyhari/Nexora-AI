@@ -59,3 +59,4 @@ export const NexoraLogo: React.FC<NexoraLogoProps> = ({ className = "", size = 3
     </svg>
   );
 };
+

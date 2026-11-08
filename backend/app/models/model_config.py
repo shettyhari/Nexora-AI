@@ -31,3 +31,4 @@ class ModelConfiguration(Base):
         DateTime(timezone=True),
         default=lambda: datetime.now(timezone.utc)
     )
+

@@ -94,3 +94,4 @@ async def test_get_me_protected(client, auth_headers):
 async def test_unauthorized_access(client):
     resp = await client.get("/api/v1/users/me")
     assert resp.status_code == 401
+

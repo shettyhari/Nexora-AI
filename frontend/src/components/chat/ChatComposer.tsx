@@ -275,3 +275,4 @@ export const ChatComposer: React.FC<ChatComposerProps> = ({
     </div>
   );
 };
+

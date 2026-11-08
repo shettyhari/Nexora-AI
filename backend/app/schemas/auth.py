@@ -41,3 +41,4 @@ class EmailVerifyRequest(BaseModel):
 class MessageResponse(BaseModel):
     message: str
     success: bool = True
+

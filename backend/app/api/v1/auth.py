@@ -282,3 +282,4 @@ async def verify_email(
     await db.commit()
 
     return MessageResponse(message="Email verified successfully")
+

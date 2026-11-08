@@ -31,3 +31,4 @@ async def test_gemini_unconfigured_error():
         chunks.append(chunk)
 
     assert any(c.type == "error" for c in chunks)
+
