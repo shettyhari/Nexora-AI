@@ -10,10 +10,34 @@ import {
 } from "@/types/chat";
 import { User, Profile, UserPreference } from "@/types/user";
 
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || "";
 const API_PREFIX = "/api/v1";
 
 class ApiClient {
+  /**
+   * Resolves the target base URL.
+   * - Server-side (Node.js runtime in Next.js Server Components, Actions, SSR):
+   *   Reads Vercel's injected service binding `BACKEND_URL`, falling back to `NEXT_PUBLIC_API_URL` or local dev.
+   * - Client-side (Browser):
+   *   Uses relative URL (empty base) so browser requests route through Vercel's top-level `/api/(.*)` rewrite,
+   *   or uses explicit `NEXT_PUBLIC_API_URL` if configured.
+   */
+  public getBaseUrl(): string {
+    if (typeof window === "undefined") {
+      const bindingUrl = process.env.BACKEND_URL || process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000";
+      return bindingUrl.replace(/\/$/, "");
+    }
+    return (process.env.NEXT_PUBLIC_API_URL || "").replace(/\/$/, "");
+  }
+
+  public getApiUrl(endpoint: string): string {
+    const base = this.getBaseUrl();
+    const cleanEndpoint = endpoint.startsWith("/") ? endpoint : `/${endpoint}`;
+    if (cleanEndpoint.startsWith("/api/")) {
+      return `${base}${cleanEndpoint}`;
+    }
+    return `${base}${API_PREFIX}${cleanEndpoint}`;
+  }
+
   private getToken(): string | null {
     if (typeof window === "undefined") return null;
     return localStorage.getItem(STORAGE_KEYS.TOKEN);
@@ -37,7 +61,7 @@ class ApiClient {
     endpoint: string,
     options: RequestInit = {}
   ): Promise<T> {
-    const url = `${API_BASE}${API_PREFIX}${endpoint}`;
+    const url = this.getApiUrl(endpoint);
     const token = this.getToken();
 
     const headers: Record<string, string> = {
@@ -59,7 +83,7 @@ class ApiClient {
       const refreshToken = typeof window !== "undefined" ? localStorage.getItem(STORAGE_KEYS.REFRESH_TOKEN) : null;
       if (refreshToken && endpoint !== "/auth/login" && endpoint !== "/auth/refresh") {
         try {
-          const refreshResp = await fetch(`${API_BASE}${API_PREFIX}/auth/refresh`, {
+          const refreshResp = await fetch(this.getApiUrl("/auth/refresh"), {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ refresh_token: refreshToken }),
@@ -222,7 +246,7 @@ class ApiClient {
     onChunk: (event: StreamEvent) => void,
     signal?: AbortSignal
   ): Promise<void> {
-    const url = `${API_BASE}${API_PREFIX}/messages`;
+    const url = this.getApiUrl("/messages");
     const token = this.getToken();
 
     const headers: Record<string, string> = {
@@ -285,7 +309,7 @@ class ApiClient {
     onChunk: (event: StreamEvent) => void,
     signal?: AbortSignal
   ): Promise<void> {
-    const url = `${API_BASE}${API_PREFIX}/messages/${messageId}/regenerate`;
+    const url = this.getApiUrl(`/messages/${messageId}/regenerate`);
     const token = this.getToken();
 
     const headers: Record<string, string> = {};
@@ -401,7 +425,7 @@ class ApiClient {
 
   // --- Attachments ---
   async uploadAttachment(file: File): Promise<Attachment> {
-    const url = `${API_BASE}${API_PREFIX}/attachments/upload`;
+    const url = this.getApiUrl("/attachments/upload");
     const token = this.getToken();
 
     const formData = new FormData();
@@ -428,7 +452,7 @@ class ApiClient {
 
   // --- Generic HTTP Methods & Multimodal / Voice / Agent helpers ---
   async post<T = any>(endpoint: string, body?: any, customOptions: any = {}): Promise<{ data: T }> {
-    const url = `${API_BASE}${API_PREFIX}${endpoint}`;
+    const url = this.getApiUrl(endpoint);
     const token = this.getToken();
     const headers: Record<string, string> = {};
     if (token) {
