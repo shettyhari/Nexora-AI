@@ -130,16 +130,41 @@ npm run dev
 ```
 Frontend will be accessible at `http://localhost:3000`.
 
+### 3. Vercel Multi-Services Deployment
+
+NEXORA AI is configured for one-click monorepo deployment on **Vercel** as a multi-service project:
+- **`backend` service:** Asynchronous FastAPI Python service mounted in `backend/` (`framework: fastapi`, entrypoint `backend/main.py`).
+- **`frontend` service:** Next.js 14 App Router service mounted in `frontend/` (`framework: nextjs`).
+- **Service Binding:** Vercel automatically injects `process.env.BACKEND_URL` into the frontend service for secure internal communication.
+- **Top-Level Rewrites:** `/api/(.*)` routes directly to `backend`, while `/(.*)` routes to `frontend`.
+
+#### Local Testing with Vercel CLI:
+```bash
+vercel dev
+```
+
+#### Deploy to Vercel:
+```bash
+vercel
+```
+
 ---
 
 ## 🧪 Automated Testing
 
-Run the complete 32-test backend test suite:
+Run the complete 61-test backend test suite:
 ```bash
 cd backend
 pytest -v
 ```
 **Test Suites Covered:**
+- `test_multimodal.py`: Image upload, OCR, screenshot analysis, video timestamp segmentation.
+- `test_voice.py`: Speech-to-text, text-to-speech generation, transcription endpoints.
+- `test_tools.py`: Tool registry, execution engine, safety approval gates.
+- `test_sandbox.py`: Subprocess code execution sandbox, static AST security validator blocking dangerous operations.
+- `test_research.py`: Web research service, content extraction, SSRF security validation.
+- `test_documents.py`: Document assistant, multi-format parsing (PDF, DOCX, XLSX, CSV, PPTX), table extraction, cross-document RAG.
+- `test_agents.py`: Multi-agent orchestrator, specialized agents (Research, Coding, Vision, Data, Document, Browser).
 - `test_auth.py`: Registration, duplicate detection, login, profile, unauthorized guards.
 - `test_router.py`: Intelligent model routing across coding, math, fast chat, vision, and manual override.
 - `test_gateway.py`: Model registry, health checks, streaming, fallback resilience, structured output.
