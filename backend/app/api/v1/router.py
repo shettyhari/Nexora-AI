@@ -11,6 +11,12 @@ from app.api.v1.memories import router as memories_router
 from app.api.v1.rag import router as rag_router
 from app.api.v1.router_eval import router as router_eval_router
 from app.api.v1.gateway_health import router as gateway_health_router
+from app.api.v1.documents import router as documents_router
+from app.api.v1.multimodal import router as multimodal_router
+from app.api.v1.voice import router as voice_router
+from app.api.v1.research import router as research_router
+from app.api.v1.agents import router as agents_router
+from app.api.v1.tools import router as tools_router
 
 api_router = APIRouter()
 
@@ -26,4 +32,9 @@ api_router.include_router(memories_router)
 api_router.include_router(rag_router)
 api_router.include_router(router_eval_router)
 api_router.include_router(gateway_health_router)
-
+api_router.include_router(documents_router)
+api_router.include_router(multimodal_router)
+api_router.include_router(voice_router)
+api_router.include_router(research_router)
+api_router.include_router(agents_router)
+api_router.include_router(tools_router)

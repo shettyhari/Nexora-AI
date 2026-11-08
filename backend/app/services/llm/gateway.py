@@ -120,4 +120,6 @@ class UnifiedModelGateway:
 
 # Global singleton gateway
 gateway = UnifiedModelGateway()
+llm_gateway = gateway
+
 

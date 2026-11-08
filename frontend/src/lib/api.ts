@@ -425,6 +425,65 @@ class ApiClient {
 
     return response.json();
   }
+
+  // --- Generic HTTP Methods & Multimodal / Voice / Agent helpers ---
+  async post<T = any>(endpoint: string, body?: any, customOptions: any = {}): Promise<{ data: T }> {
+    const url = `${API_BASE}${API_PREFIX}${endpoint}`;
+    const token = this.getToken();
+    const headers: Record<string, string> = {};
+    if (token) {
+      headers["Authorization"] = `Bearer ${token}`;
+    }
+
+    let payload: any = body;
+    if (!(body instanceof FormData)) {
+      headers["Content-Type"] = "application/json";
+      payload = JSON.stringify(body);
+    }
+
+    const response = await fetch(url, {
+      method: "POST",
+      headers,
+      body: payload,
+    });
+
+    if (!response.ok) {
+      const err = await response.json().catch(() => ({ detail: "Request failed" }));
+      throw new Error(err.detail || "Request failed");
+    }
+
+    if (customOptions?.responseType === "blob") {
+      const blob = await response.blob();
+      return { data: blob as any };
+    }
+
+    const json = await response.json();
+    return { data: json };
+  }
+
+  async synthesizeVoice(text: string, voice = "alloy"): Promise<Blob> {
+    const res = await this.post("/voice/synthesize", { text, voice }, { responseType: "blob" });
+    return res.data;
+  }
+
+  async transcribeVoice(fileBlob: Blob): Promise<string> {
+    const formData = new FormData();
+    formData.append("file", fileBlob, "voice.webm");
+    const res = await this.post<any>("/voice/transcribe", formData);
+    return res.data?.data?.text || "";
+  }
+
+  async runAgentWorkflow(goal: string, context?: any) {
+    return this.post<any>("/agents/run", { goal, context });
+  }
+
+  async getAgentsList() {
+    return this.request<any>("/agents");
+  }
+
+  async listTools() {
+    return this.request<any>("/tools");
+  }
 }
 
 export const api = new ApiClient();

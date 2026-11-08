@@ -55,8 +55,30 @@ NEXORA AI is a production-grade, full-stack ChatGPT-style neural application bui
 - **NEXORA Brand Identity**: Futuristic neon-cyan and deep obsidian palette with original SVG logo and wordmark.
 - **Full Conversation Management**: Create, rename, pin, archive, search (`⌘K`), and delete conversations.
 - **Markdown & Math**: Full GitHub Flavored Markdown (GFM), syntax-highlighted code blocks with copy button, responsive tables, and inline/block LaTeX formulas via KaTeX.
-- **Chat Composer**: Multiline auto-resizing textarea (`Enter` to send, `Shift + Enter` for new line), file uploads, model selector, reasoning toggle, web grounding toggle, and voice placeholder.
+- **Chat Composer**: Multiline auto-resizing textarea (`Enter` to send, `Shift + Enter` for new line), file uploads, model selector, reasoning toggle, web grounding toggle, and voice modal.
 - **Light & Dark Mode**: Persistent theme toggle with zero-flicker initialization.
+
+### 9. Multimodal AI & Agentic Intelligence (Prompt 3)
+- **Image Intelligence**: Upload, OCR text extraction, screenshot inspection, chart and diagram interpretation, visual Q&A, and image generation.
+- **Voice Intelligence**: Real microphone input, Speech-to-Text (`/voice/transcribe`), Text-to-Speech audio synthesis (`/voice/synthesize`), audio summarization, and interactive audio controls.
+- **Video Intelligence**: Video upload, metadata extraction, scene segmentation with clickable timestamps `[MM:SS]`, video summarization, and background async media processing (`media_jobs`).
+- **Document Intelligence**: Multi-format parser for **PDF, DOCX, XLSX, CSV, PPTX, TXT, JSON**, table extraction into Markdown, comparative analysis, and direct RAG ingestion.
+- **Authorized Web Research Agent**: Search, safe page retrieval, prompt injection defense, and synthesized research reports with verified non-fabricated citations.
+- **Multi-Agent Framework**: 8 autonomous specialized agents:
+  1. `ORCHESTRATOR`: Coordinates plans and multi-agent workflows.
+  2. `RESEARCH AGENT`: Conducts web/literature research and verifies sources.
+  3. `CODING AGENT`: Writes, reviews, refactors, and tests code.
+  4. `DATA ANALYSIS AGENT`: Processes tabular data and generates charts.
+  5. `DOCUMENT AGENT`: Analyzes, parses, and compares files.
+  6. `BROWSER AGENT`: Interacts with authorized external websites.
+  7. `VISION AGENT`: Deciphers diagrams, charts, and images.
+  8. `PERSONAL ASSISTANT AGENT`: General task coordination and productivity.
+- **Standardized Tool Execution Engine & Sandbox**:
+  - Permission levels: `READ`, `ANALYZE`, `PREPARE`, and `EXECUTE`.
+  - Sensitive action approval gate before code execution.
+  - Subprocess Python sandbox with static AST analyzer (`CodeASTAnalyzer`) blocking dangerous modules (`os`, `subprocess`, `socket`, `ctypes`, `eval`, `exec`).
+  - Strict SSRF defense (`SSRFValidator`) blocking private subnets, cloud metadata, and loopback IPs.
+- **Enhanced Multimodal UI**: Real Voice Mode modal with waveform visualizer, File Preview modal with video timestamp navigation and table views, and Multi-Agent Activity drawer.
 
 ---
 

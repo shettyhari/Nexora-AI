@@ -361,7 +361,141 @@ Executes dual dense vector + sparse BM25Okapi search and reciprocal rank fusion 
 
 ---
 
-## 11. Error Handling & Status Codes
+## 11. Document Intelligence Endpoints
+
+### 11.1 Parse Document
+- **Method**: `POST`
+- **Path**: `/documents/parse`
+- **Auth Required**: Yes
+- **Body**:
+  ```json
+  {
+    "file_path": "/path/to/doc.pdf",
+    "attachment_id": "optional-uuid"
+  }
+  ```
+- **Response**: Extracted structured text, page count, word count, and tables.
+
+### 11.2 Compare Documents
+- **Method**: `POST`
+- **Path**: `/documents/compare`
+- **Body**: `{ "file_path_1": "...", "file_path_2": "...", "focus_topic": "Architecture" }`
+- **Response**: Similarities, differences, and metric delta tables.
+
+### 11.3 RAG Ingest Document
+- **Method**: `POST`
+- **Path**: `/documents/rag-ingest`
+- **Body**: `{ "attachment_id": "uuid", "collection_id": "uuid" }`
+
+---
+
+## 12. Multimodal Intelligence Endpoints
+
+### 12.1 Image Analysis & OCR
+- **Method**: `POST`
+- **Path**: `/multimodal/image/analyze`
+- **Body**:
+  ```json
+  {
+    "file_path": "/path/to/diagram.png",
+    "prompt": "Analyze this architecture topology",
+    "analysis_type": "diagram",
+    "model": "nexora-vision"
+  }
+  ```
+
+### 12.2 Image Generation
+- **Method**: `POST`
+- **Path**: `/multimodal/image/generate`
+- **Body**: `{ "prompt": "Futuristic neural data center", "size": "1024x1024" }`
+
+### 12.3 Video Scene Analysis
+- **Method**: `POST`
+- **Path**: `/multimodal/video/analyze`
+- **Body**: `{ "file_path": "/path/to/demo.mp4" }`
+- **Response**: Scene markers with formatted timestamps `[MM:SS]`, duration, and summary.
+
+---
+
+## 13. Voice Intelligence Endpoints
+
+### 13.1 Speech-to-Text Transcription
+- **Method**: `POST`
+- **Path**: `/voice/transcribe`
+- **Body**: Multipart `file` (audio file)
+- **Response**: Transcription text, duration, and confidence.
+
+### 13.2 Text-to-Speech Synthesis
+- **Method**: `POST`
+- **Path**: `/voice/synthesize`
+- **Body**: `{ "text": "Hello, welcome to NEXORA AI.", "voice": "alloy" }`
+- **Response**: Audio binary stream (`audio/mpeg` or `audio/wav`).
+
+---
+
+## 14. Web Research Agent Endpoints
+
+### 14.1 Search Web
+- **Method**: `POST`
+- **Path**: `/research/search`
+- **Body**: `{ "query": "Transformer attention mechanisms", "max_results": 5 }`
+
+### 14.2 Synthesize Research Report
+- **Method**: `POST`
+- **Path**: `/research/report`
+- **Body**: `{ "query": "Quantum computing breakthroughs", "max_sources": 4 }`
+- **Response**: Summary, key findings, and non-fabricated citations.
+
+---
+
+## 15. Multi-Agent Framework Endpoints
+
+### 15.1 List Available Agents
+- **Method**: `GET`
+- **Path**: `/agents`
+- **Response**: Catalog of all 8 specialized agents.
+
+### 15.2 Execute Multi-Agent Workflow
+- **Method**: `POST`
+- **Path**: `/agents/run`
+- **Body**:
+  ```json
+  {
+    "goal": "Research distributed consensus algorithms and write an implementation in Python",
+    "conversation_id": "optional-uuid"
+  }
+  ```
+- **Response**: Multi-step plan, agent execution logs, and synthesized final answer.
+
+---
+
+## 16. Tool Execution Engine & Sandbox Endpoints
+
+### 16.1 List Tools
+- **Method**: `GET`
+- **Path**: `/tools`
+- **Response**: All registered tools with schemas and permission levels (`READ`, `ANALYZE`, `PREPARE`, `EXECUTE`).
+
+### 16.2 Execute Tool
+- **Method**: `POST`
+- **Path**: `/tools/execute`
+- **Body**:
+  ```json
+  {
+    "tool_id": "web_search",
+    "params": { "query": "FastAPI SSE architecture" },
+    "is_approved": false
+  }
+  ```
+
+### 16.3 Run Isolated Python Sandbox
+- **Method**: `POST`
+- **Path**: `/tools/sandbox/python`
+- **Body**: `{ "code": "print(sum(range(100)))", "timeout_seconds": 10 }`
+
+---
+
+## 17. Error Handling & Status Codes
 
 All errors return RFC 7807 compliant JSON:
 ```json

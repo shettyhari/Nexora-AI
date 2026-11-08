@@ -17,6 +17,17 @@ export interface Feedback {
   created_at: string;
 }
 
+export interface CitationItem {
+  id?: number;
+  source_id?: number;
+  title?: string;
+  source_title?: string;
+  url?: string;
+  chunk_index?: number;
+  snippet?: string;
+  content_snippet?: string;
+}
+
 export interface Message {
   id: string;
   conversation_id: string;
@@ -25,7 +36,7 @@ export interface Message {
   reasoning_content?: string | null;
   model?: string | null;
   routing_reason?: string | null;
-  citations?: Array<{ id: number; source_title: string; chunk_index: number; content_snippet: string }> | null;
+  citations?: CitationItem[] | null;
   tokens_used: number;
   is_edited: boolean;
   error?: string | null;
@@ -78,7 +89,7 @@ export interface StreamEvent {
   conversation_id?: string;
   resolved_model?: string;
   routing_reason?: string;
-  citations?: Array<{ id: number; source_title: string; chunk_index: number; content_snippet: string }>;
+  citations?: CitationItem[];
   usage?: {
     prompt_tokens: number;
     completion_tokens: number;
@@ -86,3 +97,37 @@ export interface StreamEvent {
   };
 }
 
+export interface AgentStepInfo {
+  step_number: number;
+  agent_type: string;
+  status: "pending" | "running" | "completed" | "failed" | "waiting_approval";
+  description: string;
+  output?: string;
+  tool_results?: any[];
+  error?: string;
+  execution_time_ms?: number;
+}
+
+export interface AgentWorkflowInfo {
+  workflow_id: string;
+  goal: string;
+  status: "pending" | "running" | "completed" | "failed";
+  plan: Array<{ step_number: number; agent_type: string; description: string; required_tools: string[] }>;
+  step_results: AgentStepInfo[];
+  final_response?: string;
+  total_execution_time_ms?: number;
+}
+
+export interface VideoSceneMarker {
+  timestamp_seconds: number;
+  timestamp_formatted: string;
+  label: string;
+  description: string;
+}
+
+export interface ExtractedTableInfo {
+  table_index: number;
+  headers: string[];
+  rows: string[][];
+  markdown: string;
+}

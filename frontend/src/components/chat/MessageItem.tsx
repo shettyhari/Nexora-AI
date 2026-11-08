@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useRef } from "react";
 import { Message } from "@/types/chat";
 import { MarkdownRenderer } from "./MarkdownRenderer";
 import { ThinkingBlock } from "./ThinkingBlock";
@@ -16,8 +16,13 @@ import {
   User as UserIcon,
   BookOpen,
   Cpu,
+  Volume2,
+  Pause,
+  ExternalLink,
+  Bot,
 } from "lucide-react";
 import { copyToClipboard } from "@/lib/utils";
+import { api } from "@/lib/api";
 
 interface MessageItemProps {
   message: Message;
@@ -38,6 +43,9 @@ export const MessageItem: React.FC<MessageItemProps> = ({
   const [isEditing, setIsEditing] = useState(false);
   const [editContent, setEditContent] = useState(message.content);
   const [submittingEdit, setSubmittingEdit] = useState(false);
+  const [isPlayingAudio, setIsPlayingAudio] = useState(false);
+
+  const audioPlayerRef = useRef<HTMLAudioElement | null>(null);
 
   const isUser = message.role === "user";
   const userFeedback = message.feedback?.[0]?.rating;
@@ -61,12 +69,43 @@ export const MessageItem: React.FC<MessageItemProps> = ({
     }
   };
 
+  const handleSpeak = async () => {
+    if (isPlayingAudio && audioPlayerRef.current) {
+      audioPlayerRef.current.pause();
+      setIsPlayingAudio(false);
+      return;
+    }
+
+    try {
+      setIsPlayingAudio(true);
+      // Clean markdown tags for natural speech synthesis
+      const cleanSpeech = message.content.replace(/[#*`_\[\]()]/g, " ").slice(0, 1000);
+      const res = await api.post(
+        "/voice/synthesize",
+        { text: cleanSpeech, voice: "alloy" },
+        { responseType: "blob" }
+      );
+      const audioUrl = URL.createObjectURL(res.data);
+      if (!audioPlayerRef.current) {
+        audioPlayerRef.current = new Audio(audioUrl);
+      } else {
+        audioPlayerRef.current.src = audioUrl;
+      }
+      audioPlayerRef.current.play();
+      audioPlayerRef.current.onended = () => setIsPlayingAudio(false);
+    } catch (err) {
+      console.error("Speech synthesis failed:", err);
+      setIsPlayingAudio(false);
+    }
+  };
+
   return (
     <div
-      className={`group w-full py-5 px-4 md:px-6 transition-colors ${isUser
+      className={`group w-full py-5 px-4 md:px-6 transition-colors ${
+        isUser
           ? "bg-transparent"
           : "bg-slate-50/70 dark:bg-[#0c1220]/60 border-y border-slate-100 dark:border-slate-800/40"
-        }`}
+      }`}
     >
       <div className="max-w-3xl mx-auto flex items-start gap-4">
         {/* Avatar */}
@@ -85,7 +124,7 @@ export const MessageItem: React.FC<MessageItemProps> = ({
         {/* Message Content Container */}
         <div className="flex-1 min-w-0">
           <div className="flex items-center justify-between mb-1">
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 flex-wrap">
               <span className="font-semibold text-xs text-slate-900 dark:text-slate-200">
                 {isUser ? "You" : "NEXORA"}
               </span>
@@ -155,20 +194,42 @@ export const MessageItem: React.FC<MessageItemProps> = ({
             <MarkdownRenderer content={message.content} isStreaming={isStreaming} />
           )}
 
-          {/* Citations Preview */}
+          {/* Citations Preview with External Links */}
           {!isUser && message.citations && message.citations.length > 0 && (
             <div className="mt-3 pt-2.5 border-t border-slate-200/50 dark:border-slate-800/60">
               <div className="text-[11px] font-semibold text-slate-500 dark:text-slate-400 mb-1.5 flex items-center gap-1">
-                <BookOpen className="w-3 h-3 text-cyan-500" /> Grounded Knowledge Sources:
+                <BookOpen className="w-3 h-3 text-cyan-500" /> Verified Knowledge & Research Sources:
               </div>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5">
-                {message.citations.map((c) => (
+                {message.citations.map((c, idx) => (
                   <div
-                    key={c.id}
-                    className="p-2 rounded-lg bg-slate-100/70 dark:bg-slate-800/40 text-[11px] text-slate-700 dark:text-slate-300 border border-slate-200/50 dark:border-slate-700/50"
+                    key={idx}
+                    className="p-2.5 rounded-lg bg-slate-100/70 dark:bg-slate-800/40 text-[11px] text-slate-700 dark:text-slate-300 border border-slate-200/50 dark:border-slate-700/50 flex flex-col justify-between"
                   >
-                    <span className="font-semibold text-cyan-500">[{c.id}]</span> {c.source_title}
-                    <div className="text-[10px] text-slate-400 truncate mt-0.5">{c.content_snippet}</div>
+                    <div>
+                      <div className="flex items-center justify-between gap-1">
+                        <span className="font-semibold text-cyan-500">
+                          [{c.source_id || c.id || idx + 1}]
+                        </span>
+                        {c.url && (
+                          <a
+                            href={c.url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="text-[10px] text-cyan-500 hover:underline flex items-center gap-0.5 truncate max-w-[120px]"
+                          >
+                            <ExternalLink className="w-2.5 h-2.5" />
+                            Source Link
+                          </a>
+                        )}
+                      </div>
+                      <p className="font-medium text-foreground truncate mt-0.5">
+                        {c.title || c.source_title || "Verified Source"}
+                      </p>
+                      <p className="text-[10px] text-muted-foreground line-clamp-2 mt-0.5">
+                        {c.snippet || c.content_snippet}
+                      </p>
+                    </div>
                   </div>
                 ))}
               </div>
@@ -193,6 +254,22 @@ export const MessageItem: React.FC<MessageItemProps> = ({
               >
                 {copied ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
               </button>
+
+              {/* TTS Listen button for AI responses */}
+              {!isUser && !isStreaming && (
+                <button
+                  onClick={handleSpeak}
+                  aria-label="Listen to response"
+                  title={isPlayingAudio ? "Stop Audio" : "Listen Aloud (Text-to-Speech)"}
+                  className="p-1 rounded hover:bg-slate-200/60 dark:hover:bg-slate-800 hover:text-slate-700 dark:hover:text-slate-200 transition-colors"
+                >
+                  {isPlayingAudio ? (
+                    <Pause className="w-3.5 h-3.5 text-cyan-500 animate-pulse" />
+                  ) : (
+                    <Volume2 className="w-3.5 h-3.5 text-slate-400 hover:text-cyan-400" />
+                  )}
+                </button>
+              )}
 
               {isUser && onEdit && (
                 <button
@@ -222,8 +299,9 @@ export const MessageItem: React.FC<MessageItemProps> = ({
                     onClick={() => onFeedback(message.id, "like")}
                     aria-label="Thumbs up"
                     title="Good response"
-                    className={`p-1 rounded hover:bg-slate-200/60 dark:hover:bg-slate-800 transition-colors ${userFeedback === "like" ? "text-cyan-500 dark:text-cyan-400" : "hover:text-slate-700 dark:hover:text-slate-200"
-                      }`}
+                    className={`p-1 rounded hover:bg-slate-200/60 dark:hover:bg-slate-800 transition-colors ${
+                      userFeedback === "like" ? "text-cyan-500 dark:text-cyan-400" : "hover:text-slate-700 dark:hover:text-slate-200"
+                    }`}
                   >
                     <ThumbsUp className="w-3.5 h-3.5" />
                   </button>
@@ -231,8 +309,9 @@ export const MessageItem: React.FC<MessageItemProps> = ({
                     onClick={() => onFeedback(message.id, "dislike")}
                     aria-label="Thumbs down"
                     title="Bad response"
-                    className={`p-1 rounded hover:bg-slate-200/60 dark:hover:bg-slate-800 transition-colors ${userFeedback === "dislike" ? "text-rose-500" : "hover:text-slate-700 dark:hover:text-slate-200"
-                      }`}
+                    className={`p-1 rounded hover:bg-slate-200/60 dark:hover:bg-slate-800 transition-colors ${
+                      userFeedback === "dislike" ? "text-rose-500" : "hover:text-slate-700 dark:hover:text-slate-200"
+                    }`}
                   >
                     <ThumbsDown className="w-3.5 h-3.5" />
                   </button>
@@ -245,4 +324,3 @@ export const MessageItem: React.FC<MessageItemProps> = ({
     </div>
   );
 };
-

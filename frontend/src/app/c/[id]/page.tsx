@@ -8,8 +8,10 @@ import { ChatComposer } from "@/components/chat/ChatComposer";
 import { MessageItem } from "@/components/chat/MessageItem";
 import { SearchModal } from "@/components/modals/SearchModal";
 import { ShortcutsModal } from "@/components/modals/ShortcutsModal";
+import { AgentActivityDrawer } from "@/components/chat/AgentActivityDrawer";
 import { NexoraWordmark } from "@/components/branding/NexoraWordmark";
-import { Menu, Command, AlertCircle, Globe, Loader2 } from "lucide-react";
+import { Menu, Command, AlertCircle, Globe, Loader2, Bot } from "lucide-react";
+import { AgentWorkflowInfo } from "@/types/chat";
 
 export default function ConversationPage() {
   const params = useParams();
@@ -44,6 +46,8 @@ export default function ConversationPage() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
   const [shortcutsOpen, setShortcutsOpen] = useState(false);
+  const [agentDrawerOpen, setAgentDrawerOpen] = useState(false);
+  const [activeWorkflow, setActiveWorkflow] = useState<AgentWorkflowInfo | null>(null);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
@@ -58,54 +62,67 @@ export default function ConversationPage() {
         e.preventDefault();
         setSearchOpen(true);
       }
-      if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key.toLowerCase() === "o") {
-        e.preventDefault();
-        window.location.href = "/";
-      }
       if ((e.ctrlKey || e.metaKey) && e.key === "/") {
         e.preventDefault();
-        setShortcutsOpen(true);
+        setShortcutsOpen((prev) => !prev);
       }
     };
+
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, []);
 
   return (
-    <div className="flex h-screen overflow-hidden bg-slate-50 dark:bg-[#080c14]">
+    <div className="flex h-screen w-screen overflow-hidden bg-white dark:bg-[#080d1a]">
       {/* Sidebar */}
       <ChatSidebar
-        conversations={conversations}
-        activeId={conversationId}
         isOpen={sidebarOpen}
         onClose={() => setSidebarOpen(false)}
-        onOpenSearch={() => setSearchOpen(true)}
-        onOpenShortcuts={() => setShortcutsOpen(true)}
+        conversations={conversations}
+        activeId={conversationId}
         onDeleteConversation={deleteConversation}
         onTogglePin={togglePin}
         onToggleArchive={toggleArchive}
         onRenameConversation={renameConversation}
+        onOpenSearch={() => setSearchOpen(true)}
+        onOpenShortcuts={() => setShortcutsOpen(true)}
       />
 
       {/* Main Content Area */}
-      <div className="flex-1 flex flex-col h-full min-w-0 overflow-hidden relative">
-        {/* Top Header */}
-        <header className="flex items-center justify-between px-4 py-3 border-b border-slate-200/60 dark:border-slate-800/60 bg-white/60 dark:bg-[#090d18]/60 backdrop-blur-md z-10">
-          <div className="flex items-center gap-3 min-w-0">
+      <div className="flex-1 flex flex-col h-full min-w-0 relative">
+        {/* Top Navbar */}
+        <header className="h-14 border-b border-slate-100 dark:border-slate-800/60 px-4 flex items-center justify-between bg-white/70 dark:bg-[#080d1a]/70 backdrop-blur-md z-10">
+          <div className="flex items-center gap-3">
             <button
               onClick={() => setSidebarOpen(true)}
-              className="p-2 rounded-xl text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800/60 md:hidden"
+              className="p-2 -ml-2 text-slate-500 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 md:hidden"
             >
               <Menu className="w-5 h-5" />
             </button>
-            <div className="truncate">
-              <h1 className="text-sm font-bold text-slate-800 dark:text-slate-200 truncate">
-                {activeConversation?.title || "Conversation"}
-              </h1>
+            <div className="md:hidden">
+              <NexoraWordmark logoSize={24} />
             </div>
+            {activeConversation && (
+              <span className="hidden md:inline font-medium text-xs text-slate-700 dark:text-slate-300 truncate max-w-xs">
+                {activeConversation.title}
+              </span>
+            )}
           </div>
 
           <div className="flex items-center gap-2">
+            <button
+              onClick={() => setAgentDrawerOpen((prev) => !prev)}
+              title="Toggle Multi-Agent Activity"
+              className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl border text-xs font-medium transition-all ${
+                agentDrawerOpen
+                  ? "bg-purple-500/15 text-purple-600 dark:text-purple-300 border-purple-500/30"
+                  : "border-slate-200 dark:border-slate-800 text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800/60"
+              }`}
+            >
+              <Bot className="w-3.5 h-3.5 text-purple-400" />
+              <span className="hidden sm:inline">Agents</span>
+            </button>
+
             <button
               onClick={() => setShortcutsOpen(true)}
               title="Keyboard Shortcuts (⌘/)"
@@ -127,7 +144,7 @@ export default function ConversationPage() {
           </div>
         )}
 
-        {/* Search Status Pill */}
+        {/* Web Search Status Pill */}
         {searchStatus && (
           <div className="px-4 py-2 bg-cyan-500/10 border-b border-cyan-500/20 text-cyan-600 dark:text-cyan-400 text-xs flex items-center gap-2 animate-pulse">
             <Globe className="w-3.5 h-3.5" />
@@ -135,11 +152,11 @@ export default function ConversationPage() {
           </div>
         )}
 
-        {/* Message Feed */}
+        {/* Message Feed or Loading */}
         <div className="flex-1 overflow-y-auto overflow-x-hidden flex flex-col">
           {loading ? (
             <div className="flex-1 flex items-center justify-center">
-              <Loader2 className="w-8 h-8 text-cyan-500 animate-spin" />
+              <Loader2 className="w-6 h-6 animate-spin text-cyan-500" />
             </div>
           ) : (
             <div className="flex-1 py-4">
@@ -170,8 +187,16 @@ export default function ConversationPage() {
           onToggleReasoning={setReasoningMode}
           webSearchEnabled={webSearchEnabled}
           onToggleWebSearch={setWebSearchEnabled}
+          onToggleAgentDrawer={() => setAgentDrawerOpen((prev) => !prev)}
         />
       </div>
+
+      {/* Multi-Agent Activity Drawer */}
+      <AgentActivityDrawer
+        isOpen={agentDrawerOpen}
+        onClose={() => setAgentDrawerOpen(false)}
+        workflow={activeWorkflow}
+      />
 
       {/* Modals */}
       <SearchModal
@@ -186,4 +211,3 @@ export default function ConversationPage() {
     </div>
   );
 }
-

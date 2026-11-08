@@ -11,6 +11,9 @@ from app.models.feedback import Feedback
 from app.models.audit import AuditLog
 from app.models.memory import Memory
 from app.models.rag import KnowledgeCollection, KnowledgeDocument, DocumentChunk
+from app.models.agent import AgentWorkflow, AgentStep
+from app.models.tool_execution import ToolExecution
+from app.models.media_job import MediaJob
 
 __all__ = [
     "User",
@@ -28,5 +31,8 @@ __all__ = [
     "KnowledgeCollection",
     "KnowledgeDocument",
     "DocumentChunk",
+    "AgentWorkflow",
+    "AgentStep",
+    "ToolExecution",
+    "MediaJob",
 ]
-

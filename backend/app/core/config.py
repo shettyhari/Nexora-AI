@@ -43,10 +43,11 @@ class Settings(BaseSettings):
 
     # File uploads
     UPLOAD_DIR: str = "./uploads"
-    MAX_FILE_SIZE_MB: int = 25
+    MAX_FILE_SIZE_MB: int = 50
     ALLOWED_EXTENSIONS: List[str] = [
-        "png", "jpg", "jpeg", "webp", "gif",
-        "pdf", "txt", "md", "csv", "json", "py", "ts", "tsx", "js"
+        "png", "jpg", "jpeg", "webp", "gif", "svg",
+        "pdf", "docx", "xlsx", "csv", "pptx", "txt", "md", "json", "py", "ts", "tsx", "js",
+        "mp3", "wav", "m4a", "ogg", "mp4", "webm", "mov", "avi"
     ]
 
     # AI Provider Keys & Gateway
@@ -60,6 +61,20 @@ class Settings(BaseSettings):
     OPENAI_COMPATIBLE_API_KEY: str = ""
     DEFAULT_LLM_PROVIDER: str = "gemini"
     DEFAULT_MODEL_ID: str = "nexora-auto"
+
+    # Multimodal & Voice Settings
+    IMAGE_GEN_PROVIDER: str = "openai"  # "openai", "stability", "nexora"
+    SPEECH_PROVIDER: str = "openai"     # "openai", "local", "nexora"
+    VOICE_DEFAULT_MODEL: str = "tts-1"
+    VOICE_DEFAULT_SPEAKER: str = "alloy"
+    WHISPER_MODEL: str = "whisper-1"
+
+    # Agent & Tool Execution Settings
+    MAX_AGENT_STEPS: int = 10
+    TOOL_TIMEOUT_SECONDS: float = 30.0
+    SANDBOX_TIMEOUT_SECONDS: float = 15.0
+    REQUIRE_APPROVAL_FOR_EXECUTE: bool = True
+    MAX_RESEARCH_SOURCES: int = 5
 
     # Intelligence Engine Settings
     ENABLE_INTELLIGENT_ROUTING: bool = True
