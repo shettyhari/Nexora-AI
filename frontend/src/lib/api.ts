@@ -508,6 +508,122 @@ class ApiClient {
   async listTools() {
     return this.request<any>("/tools");
   }
+
+  // --- Model Lab Endpoints ---
+  async getLabDashboard(): Promise<any> {
+    return this.request<any>("/lab/dashboard");
+  }
+
+  async getLabModels(): Promise<any[]> {
+    return this.request<any[]>("/lab/models");
+  }
+
+  async registerLabModel(data: any): Promise<any> {
+    return this.request<any>("/lab/models", {
+      method: "POST",
+      body: JSON.stringify(data),
+    });
+  }
+
+  async analyzeArchitecture(config: any): Promise<any> {
+    return this.request<any>("/lab/models/analyze-architecture", {
+      method: "POST",
+      body: JSON.stringify(config),
+    });
+  }
+
+  async getLabDatasets(): Promise<any[]> {
+    return this.request<any[]>("/lab/datasets");
+  }
+
+  async uploadLabDataset(formData: FormData): Promise<any> {
+    const url = this.getApiUrl("/lab/datasets/upload");
+    const token = this.getToken();
+    const headers: Record<string, string> = {};
+    if (token) headers["Authorization"] = `Bearer ${token}`;
+
+    const resp = await fetch(url, {
+      method: "POST",
+      headers,
+      body: formData,
+    });
+    if (!resp.ok) {
+      const err = await resp.json().catch(() => ({ detail: "Dataset upload failed" }));
+      throw new Error(err.detail || "Dataset upload failed");
+    }
+    return resp.json();
+  }
+
+  async cleanLabDataset(datasetId: string, options: { redact_pii?: boolean; seed?: number } = {}): Promise<any> {
+    return this.request<any>(`/lab/datasets/${datasetId}/clean`, {
+      method: "POST",
+      body: JSON.stringify(options),
+    });
+  }
+
+  async getLabDatasetDetails(datasetId: string): Promise<any> {
+    return this.request<any>(`/lab/datasets/${datasetId}`);
+  }
+
+  async getLabTokenizers(): Promise<any[]> {
+    return this.request<any[]>("/lab/tokenizers");
+  }
+
+  async trainLabTokenizer(data: any): Promise<any> {
+    return this.request<any>("/lab/tokenizers/train", {
+      method: "POST",
+      body: JSON.stringify(data),
+    });
+  }
+
+  async evaluateLabTokenizer(data: { test_text: string; tokenizer_id?: string }) {
+    return this.request<any>("/lab/tokenizers/evaluate", {
+      method: "POST",
+      body: JSON.stringify(data),
+    });
+  }
+
+  async getLabExperiments(): Promise<any[]> {
+    return this.request<any[]>("/lab/experiments");
+  }
+
+  async createLabExperiment(data: any): Promise<any> {
+    return this.request<any>("/lab/experiments", {
+      method: "POST",
+      body: JSON.stringify(data),
+    });
+  }
+
+  async startLabExperiment(experimentId: string): Promise<any> {
+    return this.request<any>(`/lab/experiments/${experimentId}/start`, {
+      method: "POST",
+    });
+  }
+
+  async getLabExperimentDetails(experimentId: string): Promise<any> {
+    return this.request<any>(`/lab/experiments/${experimentId}`);
+  }
+
+  async reproduceLabExperiment(experimentId: string): Promise<any> {
+    return this.request<any>(`/lab/experiments/${experimentId}/reproduce`, {
+      method: "POST",
+    });
+  }
+
+  async getLabCheckpoints(): Promise<any[]> {
+    return this.request<any[]>("/lab/checkpoints");
+  }
+
+  async getLabEvaluations(): Promise<any[]> {
+    return this.request<any[]>("/lab/evaluations");
+  }
+
+  async runLabEvaluation(data: any): Promise<any> {
+    return this.request<any>("/lab/evaluations/run", {
+      method: "POST",
+      body: JSON.stringify(data),
+    });
+  }
 }
 
 export const api = new ApiClient();

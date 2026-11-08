@@ -80,6 +80,27 @@ NEXORA AI is a production-grade, full-stack ChatGPT-style neural application bui
   - Strict SSRF defense (`SSRFValidator`) blocking private subnets, cloud metadata, and loopback IPs.
 - **Enhanced Multimodal UI**: Real Voice Mode modal with waveform visualizer, File Preview modal with video timestamp navigation and table views, and Multi-Agent Activity drawer.
 
+### 10. Proprietary Foundation Model Research Lab (Prompt 4)
+- **Isolated Research Environment**: Dedicated `/lab` route and backend research infrastructure isolated from user-facing chat services.
+- **Model Registry & Roadmap**:
+  - **NEXORA NANO** (~45M params): High-velocity experimentation for hyperparameter sensitivity and tokenizer testing.
+  - **NEXORA CORE** (~1.2B params): General-purpose instruction and reasoning foundation model.
+  - **NEXORA PRO** (~8.4B params): Flagship research target for multi-step reasoning, coding, and mathematical theorem proving.
+- **Dataset Management & Quality Pipeline**:
+  - Ingestion of JSONL, TXT, CSV with complete cryptographic provenance.
+  - 7-stage pipeline: Unicode NFKC normalization, regex PII detection & redaction (emails, phones, SSNs, IPs, credit cards via Luhn's algorithm), exact SHA-256 deduplication, quality filtering, language identification, and deterministic 80/10/10 splitting.
+- **Tokenizer Research Engine**:
+  - Authentic Byte-Pair Encoding (BPE) iterative merge learner and SentencePiece unigram modeling.
+  - Subword fertility, compression ratio (bytes per token), OOV rate, and cross-lingual compression benchmarking.
+- **Decoder-Only Transformer Architecture**:
+  - RoPE rotary position embeddings, RMSNorm root-mean-square normalization, Multi-Head & Grouped-Query Attention (GQA) with causal masking, SwiGLU feed-forward networks, and autoregressive cross-entropy loss.
+  - Analytical parameter counter, FLOPs estimator, and memory footprint calculator.
+- **Experiment Tracking & Reproducibility**:
+  - MLflow-style tracking logging step-by-step training and validation loss curves, cosine learning rate schedules, and validation perplexity.
+  - Verifiable checkpoints with SHA-256 weights digests.
+  - Immutable reproducibility lock manifests enabling one-click twin run reproduction.
+- **Model Lab UI**: Comprehensive admin workbench with Model Registry, Dataset Library, Tokenizer Lab, Architecture Workbench, Experiment Tracker, Checkpoint Browser, and Evaluation History.
+
 ---
 
 ## 🛠 Tech Stack
@@ -152,12 +173,13 @@ vercel
 
 ## 🧪 Automated Testing
 
-Run the complete 61-test backend test suite:
+Run the complete 76-test backend test suite:
 ```bash
 cd backend
 pytest -v
 ```
 **Test Suites Covered:**
+- `test_lab.py`: Foundation model registry, analytical parameter counter, RoPE rotary embeddings, RMSNorm, SwiGLU, cross-entropy loss, dataset NFKC normalization, PII scanning, deduplication, BPE tokenizer training and fertility, hardware profiling, and authentic training run execution.
 - `test_multimodal.py`: Image upload, OCR, screenshot analysis, video timestamp segmentation.
 - `test_voice.py`: Speech-to-text, text-to-speech generation, transcription endpoints.
 - `test_tools.py`: Tool registry, execution engine, safety approval gates.

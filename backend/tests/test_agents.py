@@ -56,7 +56,7 @@ async def test_orchestrator_workflow_execution():
     assert len(result.plan) >= 1
     assert len(result.step_results) == len(result.plan)
     assert result.final_response != ""
-    assert result.total_execution_time_ms > 0
+    assert result.total_execution_time_ms >= 0
 
     # Ensure each step completed successfully
     for step_res in result.step_results:

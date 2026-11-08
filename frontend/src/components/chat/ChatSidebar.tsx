@@ -22,6 +22,7 @@ import {
   MoreVertical,
   SlidersHorizontal,
   ChevronLeft,
+  FlaskConical,
 } from "lucide-react";
 
 interface ChatSidebarProps {
@@ -201,6 +202,21 @@ export const ChatSidebar: React.FC<ChatSidebarProps> = ({
             </div>
             {showArchived && <span className="text-[10px] font-bold">Active</span>}
           </button>
+
+          {/* Model Lab Navigation */}
+          <Link
+            href="/lab"
+            onClick={onClose}
+            className="w-full flex items-center justify-between px-3 py-1.5 rounded-xl text-xs font-medium text-cyan-600 dark:text-cyan-400 hover:bg-cyan-500/10 border border-cyan-500/20 transition-colors"
+          >
+            <div className="flex items-center gap-2">
+              <FlaskConical className="w-3.5 h-3.5" />
+              <span>NEXORA Model Lab</span>
+            </div>
+            <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-cyan-500/20 text-cyan-300">
+              Lab
+            </span>
+          </Link>
 
           {/* User Account / Profile button */}
           {user ? (

@@ -14,6 +14,14 @@ from app.models.rag import KnowledgeCollection, KnowledgeDocument, DocumentChunk
 from app.models.agent import AgentWorkflow, AgentStep
 from app.models.tool_execution import ToolExecution
 from app.models.media_job import MediaJob
+from app.models.lab import (
+    LabModel,
+    LabDataset,
+    LabTokenizer,
+    LabExperiment,
+    LabCheckpoint,
+    LabEvaluation,
+)
 
 __all__ = [
     "User",
@@ -35,4 +43,10 @@ __all__ = [
     "AgentStep",
     "ToolExecution",
     "MediaJob",
+    "LabModel",
+    "LabDataset",
+    "LabTokenizer",
+    "LabExperiment",
+    "LabCheckpoint",
+    "LabEvaluation",
 ]
