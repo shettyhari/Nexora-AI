@@ -354,3 +354,4 @@ class ModelRegistry:
 
 # Global singleton instance
 model_registry = ModelRegistry()
+

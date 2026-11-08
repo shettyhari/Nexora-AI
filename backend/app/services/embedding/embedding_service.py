@@ -119,3 +119,4 @@ class EmbeddingService:
 
 # Global singleton instance
 embedding_service = EmbeddingService(dimension=settings.VECTOR_DIMENSION)
+

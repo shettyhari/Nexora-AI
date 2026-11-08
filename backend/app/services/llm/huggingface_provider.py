@@ -217,3 +217,4 @@ class HuggingFaceProvider(BaseLLMProvider):
                 latency_ms=round((time.time() - start_time) * 1000, 2),
                 error=str(e)
             )
+

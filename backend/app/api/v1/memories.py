@@ -127,3 +127,4 @@ async def clear_all_memories(
     """Clear all memories for the user."""
     count = await memory_service.clear_memories(db=db, user_id=current_user.id, memory_type=memory_type)
     return SimpleResponse(message=f"Successfully cleared {count} memories")
+

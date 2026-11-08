@@ -52,3 +52,4 @@ async def test_context_compression_and_summarization():
     assert any("SUMMARY OF EARLIER MESSAGES" in m.content for m in compressed)
     # The last 2 turns must be preserved intact
     assert compressed[-1].content == long_history[-1].content
+

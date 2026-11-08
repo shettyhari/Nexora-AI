@@ -133,3 +133,4 @@ class DocumentChunk(Base):
     __table_args__ = (
         Index("ix_chunks_doc_idx", "document_id", "chunk_index"),
     )
+

@@ -63,11 +63,10 @@ export const MessageItem: React.FC<MessageItemProps> = ({
 
   return (
     <div
-      className={`group w-full py-5 px-4 md:px-6 transition-colors ${
-        isUser
+      className={`group w-full py-5 px-4 md:px-6 transition-colors ${isUser
           ? "bg-transparent"
           : "bg-slate-50/70 dark:bg-[#0c1220]/60 border-y border-slate-100 dark:border-slate-800/40"
-      }`}
+        }`}
     >
       <div className="max-w-3xl mx-auto flex items-start gap-4">
         {/* Avatar */}
@@ -223,9 +222,8 @@ export const MessageItem: React.FC<MessageItemProps> = ({
                     onClick={() => onFeedback(message.id, "like")}
                     aria-label="Thumbs up"
                     title="Good response"
-                    className={`p-1 rounded hover:bg-slate-200/60 dark:hover:bg-slate-800 transition-colors ${
-                      userFeedback === "like" ? "text-cyan-500 dark:text-cyan-400" : "hover:text-slate-700 dark:hover:text-slate-200"
-                    }`}
+                    className={`p-1 rounded hover:bg-slate-200/60 dark:hover:bg-slate-800 transition-colors ${userFeedback === "like" ? "text-cyan-500 dark:text-cyan-400" : "hover:text-slate-700 dark:hover:text-slate-200"
+                      }`}
                   >
                     <ThumbsUp className="w-3.5 h-3.5" />
                   </button>
@@ -233,9 +231,8 @@ export const MessageItem: React.FC<MessageItemProps> = ({
                     onClick={() => onFeedback(message.id, "dislike")}
                     aria-label="Thumbs down"
                     title="Bad response"
-                    className={`p-1 rounded hover:bg-slate-200/60 dark:hover:bg-slate-800 transition-colors ${
-                      userFeedback === "dislike" ? "text-rose-500" : "hover:text-slate-700 dark:hover:text-slate-200"
-                    }`}
+                    className={`p-1 rounded hover:bg-slate-200/60 dark:hover:bg-slate-800 transition-colors ${userFeedback === "dislike" ? "text-rose-500" : "hover:text-slate-700 dark:hover:text-slate-200"
+                      }`}
                   >
                     <ThumbsDown className="w-3.5 h-3.5" />
                   </button>

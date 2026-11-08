@@ -170,3 +170,4 @@ class NexoraProvider(BaseLLMProvider):
             latency_ms=1.2,
             models=["nexora-flagship", "nexora-fast", "nexora-auto"]
         )
+

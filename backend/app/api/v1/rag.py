@@ -116,3 +116,4 @@ async def search_knowledge(
         alpha=data.alpha
     )
     return [r.model_dump() for r in results]
+

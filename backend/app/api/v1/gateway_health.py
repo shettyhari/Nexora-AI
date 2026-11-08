@@ -20,3 +20,4 @@ async def check_gateway_health(
         provider_name: report.model_dump()
         for provider_name, report in health_reports.items()
     }
+

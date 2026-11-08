@@ -157,3 +157,4 @@ class ContextManager:
 
 # Global singleton instance
 context_manager = ContextManager()
+

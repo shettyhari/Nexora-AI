@@ -69,3 +69,4 @@ class Memory(Base):
         Index("ix_memories_user_type", "user_id", "memory_type"),
         Index("ix_memories_user_cat", "user_id", "category"),
     )
+

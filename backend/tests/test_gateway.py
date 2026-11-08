@@ -73,3 +73,4 @@ async def test_gateway_structured_output():
     assert resp.content != ""
     assert "status" in resp.content or "result" in resp.content
     assert resp.usage.total_tokens > 0
+
