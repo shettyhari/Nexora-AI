@@ -1,0 +1,203 @@
+version: "3.9"
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: nexora-prod-postgres
+    restart: always
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-nexora}
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD must be set in production}
+    volumes:
+      - postgres_prod_data:/var/lib/postgresql/data
+      - ./backups:/backups
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres} -d ${POSTGRES_DB:-nexora}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - nexora_internal
+
+  redis:
+    image: redis:7-alpine
+    container_name: nexora-prod-redis
+    restart: always
+    command: ["redis-server", "--appendonly", "yes", "--maxmemory", "512mb", "--maxmemory-policy", "allkeys-lru"]
+    volumes:
+      - redis_prod_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - nexora_internal
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: nexora-prod-backend
+    restart: always
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    env_file:
+      - .env.production
+    environment:
+      ENVIRONMENT: production
+      STRICT_SECRET_VALIDATION: "true"
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-nexora}
+      REDIS_URL: redis://redis:6379/0
+    volumes:
+      - ./backend/uploads:/app/uploads
+      - ./backend/lab_checkpoints:/app/lab_checkpoints
+      - ./backend/lab_jobs:/app/lab_jobs
+      - ./backend/lab_exports:/app/lab_exports
+      - ./backups:/app/backups
+    command: >
+      sh -c "alembic upgrade head && uvicorn app.main:app --host 0.0.0.0 --port 8000 --workers 4"
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://localhost:8000/health || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+    deploy:
+      resources:
+        limits:
+          memory: 2G
+    networks:
+      - nexora_internal
+      - nexora_edge
+
+  # Strictly isolated training worker: NEVER exposed to edge/public ingress
+  worker-training:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile.worker
+    container_name: nexora-prod-worker-training
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    env_file:
+      - .env.production
+    environment:
+      ENVIRONMENT: production
+      NEXORA_IN_ML_WORKER: "1"
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-nexora}
+      REDIS_URL: redis://redis:6379/0
+    security_opt:
+      - no-new-privileges:true
+    volumes:
+      - ./backend/lab_jobs:/app/lab_jobs
+      - ./backend/lab_checkpoints:/app/lab_checkpoints
+      - ./backend/lab_data:/app/lab_data
+      - ./backend/lab_exports:/app/lab_exports
+      - ./backend/lab_optimized:/app/lab_optimized
+    command: >
+      sh -c "python -c 'import time, app.lab.training.worker_runner as w; print(\"Isolated Training Worker Ready\"); [time.sleep(60) for _ in iter(int, 1)]'"
+    deploy:
+      resources:
+        limits:
+          memory: 8G
+    networks:
+      - nexora_internal
+
+  # Dedicated proprietary model serving runtime (internal network only, proxied through API auth gate)
+  worker-inference:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile.worker
+    container_name: nexora-prod-worker-inference
+    restart: always
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    env_file:
+      - .env.production
+    environment:
+      ENVIRONMENT: production
+      NEXORA_IN_ML_WORKER: "1"
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-nexora}
+      REDIS_URL: redis://redis:6379/0
+    volumes:
+      - ./backend/lab_checkpoints:/app/lab_checkpoints:ro
+      - ./backend/lab_optimized:/app/lab_optimized:ro
+    command: ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8001", "--workers", "2"]
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://localhost:8001/v1/health || exit 1"]
+      interval: 20s
+      timeout: 5s
+      retries: 5
+    deploy:
+      resources:
+        limits:
+          memory: 4G
+    networks:
+      - nexora_internal
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: nexora-prod-frontend
+    restart: always
+    depends_on:
+      backend:
+        condition: service_healthy
+    environment:
+      NODE_ENV: production
+      NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost}
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:3000/ || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+    deploy:
+      resources:
+        limits:
+          memory: 1G
+    networks:
+      - nexora_edge
+
+  nginx:
+    image: nginx:1.27-alpine
+    container_name: nexora-prod-nginx
+    restart: always
+    depends_on:
+      backend:
+        condition: service_healthy
+      frontend:
+        condition: service_healthy
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./infra/nginx.conf:/etc/nginx/nginx.conf:ro
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost/nginx-health || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+    networks:
+      - nexora_edge
+      - nexora_internal
+
+volumes:
+  postgres_prod_data:
+  redis_prod_data:
+
+networks:
+  nexora_edge:
+    driver: bridge
+  nexora_internal:
+    driver: bridge

@@ -60,6 +60,11 @@ class ModelDescriptor(BaseModel):
     status: ModelStatus = ModelStatus.ACTIVE
     is_default: bool = False
     recommended_intents: List[str] = Field(default_factory=lambda: ["general"])
+    min_plan_tier: str = "free"
+    is_proprietary: bool = False
+    checkpoint_id: Optional[str] = None
+    deployment_alias: Optional[str] = None
+    checkpoint_path: Optional[str] = None
 
 
 class ModelRegistry:
@@ -117,7 +122,9 @@ class ModelRegistry:
                 deployment=ModelDeployment.CLOUD,
                 status=ModelStatus.ACTIVE,
                 is_default=False,
-                recommended_intents=["coding", "reasoning", "architecture"]
+                recommended_intents=["coding", "reasoning", "architecture"],
+                min_plan_tier="free",
+                is_proprietary=True,
             ),
 
             # 3. NEXORA Fast
@@ -141,7 +148,9 @@ class ModelRegistry:
                 deployment=ModelDeployment.CLOUD,
                 status=ModelStatus.ACTIVE,
                 is_default=False,
-                recommended_intents=["fast", "summarization", "simple_qa"]
+                recommended_intents=["fast", "summarization", "simple_qa"],
+                min_plan_tier="free",
+                is_proprietary=True,
             ),
 
             # 4. Google Gemini 1.5 Pro
@@ -350,6 +359,72 @@ class ModelRegistry:
             self._models[model_id].status = status
             return True
         return False
+
+    def sync_published_models(self, published_rows: List[Any], checkpoint_paths: Optional[Dict[str, str]] = None) -> None:
+        """Dynamically synchronize PublishedModel catalog entries & Lab checkpoints into active registry."""
+        ckpt_paths = checkpoint_paths or {}
+        for row in published_rows:
+            prov_str = (getattr(row, "provider", "nexora") or "nexora").lower()
+            try:
+                prov = ModelProvider(prov_str)
+            except ValueError:
+                prov = ModelProvider.NEXORA
+
+            is_active = bool(getattr(row, "is_enabled", True)) and (
+                getattr(row, "approval_status", "approved") == "approved"
+            )
+            ckpt_id = getattr(row, "checkpoint_id", None)
+            existing = self._models.get(row.id)
+            if existing:
+                existing.name = row.display_name
+                existing.description = row.description or existing.description
+                existing.version = row.version or existing.version
+                existing.context_window = row.context_window
+                existing.max_output_tokens = row.max_output_tokens
+                existing.pricing = ModelPricing(
+                    input_per_million=row.input_price_per_million,
+                    output_per_million=row.output_price_per_million,
+                )
+                existing.capabilities.vision = bool(row.supports_vision)
+                existing.capabilities.reasoning = bool(row.supports_reasoning)
+                existing.min_plan_tier = getattr(row, "min_plan_tier", "free")
+                existing.is_proprietary = bool(getattr(row, "is_proprietary", False))
+                existing.checkpoint_id = ckpt_id
+                existing.deployment_alias = getattr(row, "deployment_alias", None)
+                existing.checkpoint_path = ckpt_paths.get(ckpt_id) if ckpt_id else existing.checkpoint_path
+                existing.status = ModelStatus.ACTIVE if is_active else ModelStatus.OFFLINE
+            else:
+                desc = ModelDescriptor(
+                    id=row.id,
+                    name=row.display_name,
+                    provider=prov,
+                    version=row.version or "1.0.0",
+                    description=row.description or "Published NEXORA proprietary fine-tuned model.",
+                    capabilities=ModelCapabilities(
+                        streaming=True,
+                        reasoning=bool(row.supports_reasoning),
+                        vision=bool(row.supports_vision),
+                        function_calling=True,
+                        json_output=True,
+                    ),
+                    context_window=row.context_window,
+                    max_output_tokens=row.max_output_tokens,
+                    supported_modalities=["text", "image"] if row.supports_vision else ["text"],
+                    pricing=ModelPricing(
+                        input_per_million=row.input_price_per_million,
+                        output_per_million=row.output_price_per_million,
+                    ),
+                    deployment=ModelDeployment.SELF_HOSTED if ckpt_id else ModelDeployment.CLOUD,
+                    status=ModelStatus.ACTIVE if is_active else ModelStatus.OFFLINE,
+                    is_default=False,
+                    recommended_intents=["proprietary", "fine_tuned", "general"],
+                    min_plan_tier=getattr(row, "min_plan_tier", "free"),
+                    is_proprietary=bool(getattr(row, "is_proprietary", True)),
+                    checkpoint_id=ckpt_id,
+                    deployment_alias=getattr(row, "deployment_alias", None) or row.id,
+                    checkpoint_path=ckpt_paths.get(ckpt_id) if ckpt_id else None,
+                )
+                self._models[row.id] = desc
 
 
 # Global singleton instance

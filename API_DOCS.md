@@ -2,9 +2,9 @@
 
 This document provides a comprehensive reference for the NEXORA AI backend API (v1), including the Unified Model Gateway, Model Registry, Intelligent Router, Memory Engine, and RAG Pipeline.
 
-**Base URL**: `http://localhost:8000/api/v1`  
-**Interactive Swagger UI**: `http://localhost:8000/docs`  
-**OpenAPI Specification**: `http://localhost:8000/openapi.json`
+**Base URL**: `http://localhost:8000/api/v1` (Commercial OpenAI SDK base: `http://localhost:8000/v1`)  
+**Interactive Swagger UI**: `http://localhost:8000/api/docs`  
+**OpenAPI Specification**: `http://localhost:8000/api/openapi.json`  
 
 ---
 
@@ -19,7 +19,19 @@ This document provides a comprehensive reference for the NEXORA AI backend API (
 8. [RAG Knowledge Engine Endpoints](#8-rag-knowledge-engine-endpoints)
 9. [Attachments Endpoints](#9-attachments-endpoints)
 10. [Feedback Endpoints](#10-feedback-endpoints)
-11. [Error Handling & Status Codes](#11-error-handling--status-codes)
+11. [Document Intelligence Endpoints](#11-document-intelligence-endpoints)
+12. [Multimodal Intelligence Endpoints](#12-multimodal-intelligence-endpoints)
+13. [Voice Intelligence Endpoints](#13-voice-intelligence-endpoints)
+14. [Web Research Agent Endpoints](#14-web-research-agent-endpoints)
+15. [Multi-Agent Framework Endpoints](#15-multi-agent-framework-endpoints)
+16. [Tool Execution Engine & Sandbox Endpoints](#16-tool-execution-engine--sandbox-endpoints)
+17. [Model Training, Fine-Tuning & OpenAI Serving Endpoints (Prompts 5–6)](#17-model-training-fine-tuning--openai-serving-endpoints-prompts-56)
+18. [Commercial Billing & Subscription Endpoints (Prompt 6)](#18-commercial-billing--subscription-endpoints-prompt-6)
+19. [Developer API Keys & Usage Accounting (Prompt 6)](#19-developer-api-keys--usage-accounting-prompt-6)
+20. [Commercial OpenAI-Compatible Serving API (`/v1/*`)](#20-commercial-openai-compatible-serving-api-v1)
+21. [Administration Control Center Endpoints (Admin RBAC)](#21-administration-control-center-endpoints-admin-rbac)
+22. [Account Erasure (GDPR), Health & Observability](#22-account-erasure-gdpr-health--observability)
+23. [Error Handling & Status Codes](#23-error-handling--status-codes)
 
 ---
 
@@ -59,6 +71,9 @@ Retrieves all active models dynamically from the backend Model Registry.
     "supports_tools": true,
     "is_default": true,
     "is_enabled": true,
+    "is_proprietary": true,
+    "min_plan_tier": "free",
+    "plan_permitted": true,
     "pricing": {
       "input_per_million": 0.50,
       "output_per_million": 2.00
@@ -214,18 +229,18 @@ Streams tokens token-by-token via Server-Sent Events (SSE) through the 8-Stage R
 ```
 
 #### SSE Stream Protocol (`text/event-stream`)
+Every stream enforces truthful attribution (`resolved_model`, `actual_provider`, `fallback_used`, `fallback_from_model`), plan quotas/RPM gates, and per-request cost tracking:
 ```
 data: {"type": "start", "message_id": "asst_msg_123", "conversation_id": "4cf517be-..."}
 
-data: {"type": "routing", "resolved_model": "claude-3-5-sonnet", "routing_reason": "Autonomous routing: Complex distributed systems query routed to Claude 3.5 Sonnet", "citations": [{"id": 1, "source_title": "distributed_systems.md", "chunk_index": 2, "content_snippet": "..."}]}
+data: {"type": "routing", "resolved_model": "claude-3-5-sonnet", "actual_provider": "anthropic", "fallback_used": false, "fallback_from_model": null, "routing_reason": "Autonomous routing: Complex distributed systems query routed to Claude 3.5 Sonnet", "citations": [{"id": 1, "source_title": "distributed_systems.md", "chunk_index": 2, "content_snippet": "..."}]}
 
-data: {"type": "reasoning", "content": "Analyzing consensus message round-trips in un-pipelined leader election...\n", "resolved_model": "claude-3-5-sonnet"}
+data: {"type": "reasoning", "content": "Analyzing consensus message round-trips in un-pipelined leader election...\n", "resolved_model": "claude-3-5-sonnet", "actual_provider": "anthropic"}
 
-data: {"type": "token", "content": "Both ", "resolved_model": "claude-3-5-sonnet"}
-data: {"type": "token", "content": "Raft and Paxos ", "resolved_model": "claude-3-5-sonnet"}
-data: {"type": "token", "content": "achieve consensus with $2F+1$ nodes...", "resolved_model": "claude-3-5-sonnet"}
+data: {"type": "token", "content": "Both ", "resolved_model": "claude-3-5-sonnet", "actual_provider": "anthropic", "fallback_used": false}
+data: {"type": "token", "content": "Raft and Paxos ", "resolved_model": "claude-3-5-sonnet", "actual_provider": "anthropic", "fallback_used": false}
 
-data: {"type": "done", "finish_reason": "stop", "resolved_model": "claude-3-5-sonnet", "citations": [...]}
+data: {"type": "done", "finish_reason": "stop", "resolved_model": "claude-3-5-sonnet", "actual_provider": "anthropic", "fallback_used": false, "fallback_from_model": null, "citations": [...], "usage": {"prompt_tokens": 120, "completion_tokens": 240, "total_tokens": 360, "cost_usd": 0.00396}}
 ```
 
 ---
@@ -495,7 +510,9 @@ Executes dual dense vector + sparse BM25Okapi search and reciprocal rank fusion 
 
 ---
 
-## 17. Model Training, Fine-Tuning & OpenAI Serving Endpoints (Prompt 5)
+## 17. Model Training, Fine-Tuning & OpenAI Serving Endpoints (Prompts 5–6)
+
+All `/api/v1/lab/*` routes require RBAC `role in ("researcher", "admin")` (`require_lab_access`).
 
 ### 17.1 Hardware Telemetry & Training Frameworks
 - `GET /api/v1/lab/telemetry`: Authentic NVML/nvidia-smi/PyTorch/psutil CPU, RAM, Disk & GPU metrics (`GPU Unavailable` when no GPU exists).
@@ -508,26 +525,87 @@ Executes dual dense vector + sparse BM25Okapi search and reciprocal rank fusion 
 - `POST /api/v1/lab/jobs/{id}/start|pause|resume|recover|cancel`: Process-level worker lifecycle orchestration.
 - `GET /api/v1/lab/jobs/{id}/logs`: Tail stdout/stderr worker logs.
 
-### 17.3 Checkpoint Validation, Export & Rollback
+### 17.3 Checkpoint Validation, Export, Rollback & Production Publish Bridge
 - `POST /api/v1/lab/checkpoints/{id}/validate`: SHA-256 verification, weight reload, zero NaN/Inf check, forward-pass verification.
 - `POST /api/v1/lab/checkpoints/{id}/export`: Portable SafeTensors/HF release bundle + `EXPORT_MANIFEST.json`.
 - `POST /api/v1/lab/checkpoints/{id}/rollback`: Switch active validated rollback pointer.
+- `POST /api/v1/lab/checkpoints/{id}/publish`: Validate disk SHA-256 & promote checkpoint live to `PublishedModel` & `ModelRegistry` (`model_id`, `display_name`, `min_plan_tier`, pricing).
 
 ### 17.4 Comparative Benchmarks & Quantization
 - `POST /api/v1/lab/benchmarks/compare`: 10-dimension evaluation (`general_knowledge`, `reasoning`, `mathematics`, `coding`, `instruction_following`, `multilingual`, `long_context`, `factuality`, `safety`, `tool_calling`) + 5-gram/SHA-256 data leakage blocker + regression gate.
 - `POST /api/v1/lab/benchmarks/{id}/human-rating`: Record human evaluator judgments.
 - `POST /api/v1/lab/optimizations/run`: Real `fp32`/`fp16`/`bf16`/`int8_dynamic`/`int4_nf4` compression, TTFT ms, decode tok/s, peak memory, context & batch sweeps.
 
-### 17.5 Independent OpenAI-Compatible Serving Endpoints (`/v1/*`)
-- `POST /api/v1/lab/deployments` / `POST /api/v1/lab/deployments/{id}/stop`: Deploy validated checkpoints (`transformers`, `vllm` CUDA, `pytorch_native`).
-- `GET /v1/models` & `GET /v1/health`: Active serving endpoints and accelerator health.
-- `POST /v1/chat/completions` (`stream=false` JSON or `stream=true` SSE `[DONE]`) & `POST /v1/completions`.
+### 17.5 Independent OpenAI-Compatible Serving Deployments (`/api/v1/lab/deployments`)
+- `GET /api/v1/lab/deployments` / `POST /api/v1/lab/deployments` / `POST /api/v1/lab/deployments/{id}/stop`: Deploy validated checkpoints (`transformers`, `vllm` CUDA, `pytorch_native`).
+- `GET /v1/health`: Active OpenAI serving deployments & hardware health.
 
 ---
 
-## 18. Error Handling & Status Codes
+## 18. Commercial Billing & Subscription Endpoints (Prompt 6)
 
-All errors return RFC 7807 compliant JSON:
+- `GET /api/v1/billing/plans` *(Public)*: List active `free` (\$0 / 250K tokens), `pro` (\$29/mo / 5M tokens, API access), and `enterprise` (\$199/mo / 50M tokens) subscription plans.
+- `GET /api/v1/billing/subscription`: Returns active subscription cycle, remaining token balance, utilization %, and plan limits (auto-resets expired billing periods).
+- `POST /api/v1/billing/subscribe`: Upgrade or downgrade plan (`{ "tier": "pro", "billing_cycle": "monthly", "payment_method_summary": "..." }`), emitting a paid `BillingInvoice`.
+- `POST /api/v1/billing/cancel`: Schedule period-end cancellation (`{ "immediate": false }`) or downgrade immediately to Free (`{ "immediate": true }`).
+- `GET /api/v1/billing/invoices`: Retrieve billing receipts (`invoice_number`, `amount_usd`, `status`, `billing_reason`).
+- `POST /api/v1/billing/webhook`: Stripe-compatible webhook verifying `Stripe-Signature` (`t=...,v1=...`) via constant-time HMAC-SHA256; rejects invalid signatures with `400` and logs a `SecurityEvent`.
+
+---
+
+## 19. Developer API Keys & Usage Accounting (Prompt 6)
+
+- `GET /api/v1/developer/keys`: List masked API keys (`nex_live_...••••••••••••`). Plaintext secrets & `SHA-256` hashes are never exposed.
+- `POST /api/v1/developer/keys`: Mint a new `nex_live_...` API key (requires `pro`/`enterprise` plan or `admin` role). Returns `plaintext_key` **once**. Body: `{ "name": "Prod App", "scopes": ["models", "chat", "embeddings"], "expires_in_days": 90 }`.
+- `POST /api/v1/developer/keys/{key_id}/revoke`: Immediately revoke an owned API key.
+- `POST /api/v1/developer/keys/{key_id}/rotate`: Atomically revoke the previous key and return a newly minted replacement key preserving scopes.
+- `GET /api/v1/developer/usage`: Aggregated API request count, total tokens, estimated USD cost, mean latency, plan quotas, and last 50 `ApiUsageLog` entries.
+
+---
+
+## 20. Commercial OpenAI-Compatible Serving API (`/v1/*`)
+
+Accepts either **Commercial Developer API Keys** (`Authorization: Bearer nex_live_...` or `X-API-Key: nex_live_...`) or **User JWTs** via `authenticate_api_principal`. Enforces `api_access_enabled`, sliding-window RPM rate limits, monthly token quotas, and model `min_plan_tier`.
+
+- `GET /v1/models`: OpenAI model list uniting live Lab inference deployments and active `ModelRegistry` entries (`proprietary`, `min_plan_tier`, `provider`).
+- `GET /v1/health`: Inference runtime health and active deployment telemetry.
+- `POST /v1/embeddings`: Generate dense vectors (`{ "model": "text-embedding-3-small", "input": [...] }`) with token usage deduction & `ApiUsageLog` recording.
+- `POST /v1/chat/completions`: Standard OpenAI chat completions (`stream=false` JSON or `stream=true` SSE `chat.completion.chunk` + `[DONE]`). Returns top-level `"model"` reflecting the actual executed model and `"nexora_attribution"` (`requested_model`, `resolved_model`, `actual_provider`, `fallback_used`, `fallback_from_model`, `cost_usd`).
+- `POST /v1/completions`: Legacy prompt completion wrapper backed by `/v1/chat/completions`.
+
+---
+
+## 21. Administration Control Center Endpoints (Admin RBAC)
+
+Strictly restricted to `role == "admin"` (`require_admin`, failing closed with `403 Forbidden` and forensic `SecurityEvent` logging):
+
+- `GET /api/v1/admin/overview`: Platform KPIs (total/active users, paid invoice revenue, API requests/tokens/cost/latency/errors, active API keys, running Lab training jobs, security event count).
+- `GET /api/v1/admin/users`: List all users with RBAC role & subscription status.
+- `PATCH /api/v1/admin/users/{user_id}`: Update `role` (`user`, `researcher`, `admin`), `is_active`, `is_verified`, or `plan_tier`.
+- `GET /api/v1/admin/plans` & `PATCH /api/v1/admin/plans/{plan_id}`: Reconfigure plan pricing, monthly token quotas, RPM limits, upload size caps, API access, and allowed models live.
+- `GET /api/v1/admin/models` & `PATCH /api/v1/admin/models/{model_id}`: Inspect full catalog (including disabled models), enable/disable models, adjust per-1M token pricing, and alter `min_plan_tier`.
+- `POST /api/v1/admin/models/publish-checkpoint`: Validate SHA-256 & promote a Model Lab checkpoint into production `PublishedModel` + `AuditLog`.
+- `GET /api/v1/admin/providers`: Live `UnifiedModelGateway` provider health plus boolean credential presence indicators (keys remain hidden).
+- `GET /api/v1/admin/analytics`: Per-model/provider token, USD cost, latency breakdown, and recent `>= 400` API error logs.
+- `GET /api/v1/admin/training-and-gpu`: Real hardware telemetry, inference engine readiness, active training jobs, and serving deployments.
+- `GET /api/v1/admin/agent-activity`: Recent `AgentWorkflow` and `ToolExecution` platform activity.
+- `GET /api/v1/admin/security-events`: Latest 100 forensic `SecurityEvent` alerts (`path_traversal`, `invalid_api_key`, `rbac_violation`, `invalid_webhook_signature`, `rate_limit_exceeded`, etc.).
+- `GET /api/v1/admin/audit-logs`: Latest 100 administrative & compliance `AuditLog` entries.
+- `GET /api/v1/admin/system-health`: Real-time DB connectivity/latency, Redis/memory cache state, `ObjectStorageService` health (`backend`, `status`, `writable`), and host CPU/RAM telemetry.
+
+---
+
+## 22. Account Erasure (GDPR), Health & Observability
+
+- `DELETE /api/v1/users/me`: GDPR Right-to-Erasure — deletes physical objects via `ObjectStorageService.delete_object()`, purges cross-table user records (`Attachment`, `Feedback`, `Memory`, `KnowledgeCollection`, `AgentWorkflow`, `ToolExecution`, `MediaJob`, `DeveloperApiKey`, `BillingInvoice`, `UserSubscription`, `User`), and persists an anonymized `AuditLog` (`user_id=None`, `action="gdpr_account_deleted"`).
+- `GET /health` & `GET /api/health`: Service readiness JSON (`status`, `version`, `environment`, `uptime_seconds`).
+- `GET /metrics`: Prometheus text-exposition metrics (`nexora_http_requests_total`, `nexora_http_errors_total`, `nexora_http_avg_latency_ms`, `nexora_models_registered`, `nexora_process_uptime_seconds`).
+
+---
+
+## 23. Error Handling & Status Codes
+
+All errors return RFC 7807 compliant JSON with hardened HTTP security headers (`X-Content-Type-Options: nosniff`, `X-Frame-Options: DENY`, `Referrer-Policy`, `Permissions-Policy`, and `Strict-Transport-Security` in production):
 ```json
 {
   "detail": "Error description"
@@ -535,8 +613,11 @@ All errors return RFC 7807 compliant JSON:
 ```
 - `200 OK`: Request succeeded.
 - `201 Created`: Entity created.
-- `400 Bad Request`: Validation failure.
-- `401 Unauthorized`: Missing or invalid JWT.
-- `403 Forbidden`: Insufficient permissions.
+- `400 Bad Request`: Validation failure or invalid Stripe webhook signature.
+- `401 Unauthorized`: Missing, expired, or revoked JWT / API key.
+- `402 Payment Required`: Inactive subscription billing status.
+- `403 Forbidden`: Insufficient RBAC permissions or model/API plan entitlement.
 - `404 Not Found`: Target entity not found or access denied.
-- `503 Service Unavailable`: Upstream provider failure (automatically recovered via fallback).
+- `413 Payload Too Large`: Upload exceeds plan `max_file_size_mb`.
+- `429 Too Many Requests`: Sliding-window RPM limit or monthly token quota exceeded (includes `Retry-After`).
+- `503 Service Unavailable`: Upstream provider failure (automatically recovered via truthful fallback where configured).

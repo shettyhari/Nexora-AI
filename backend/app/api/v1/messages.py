@@ -3,8 +3,8 @@ from datetime import datetime, timezone
 import json
 import logging
 import time
-from typing import Any, AsyncGenerator, List, Optional
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from typing import Any, AsyncGenerator, Dict, List, Optional
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from fastapi.responses import StreamingResponse
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -15,6 +15,7 @@ from app.core.config import settings
 from app.core.database import AsyncSessionLocal, get_db
 from app.models.attachment import Attachment
 from app.models.conversation import Conversation
+from app.models.ecosystem import ApiUsageLog
 from app.models.message import Message
 from app.models.usage import UsageRecord
 from app.models.user import User
@@ -22,8 +23,9 @@ from app.schemas.auth import MessageResponse as SimpleResponse
 from app.schemas.message import (
     MessageCreateRequest,
     MessageEditRequest,
-    MessageResponse
+    MessageResponse,
 )
+from app.services.billing_service import billing_service
 from app.services.llm.base import LLMMessage
 from app.services.memory.memory_service import memory_service
 from app.services.model_registry.registry import model_registry
@@ -42,62 +44,61 @@ async def generate_chat_stream(
     reasoning_mode: bool,
     web_search: bool,
     user_prompt: str,
-    attachment_ids: Optional[List[str]] = None
+    attachment_ids: Optional[List[str]] = None,
 ) -> AsyncGenerator[str, None]:
-    """Stream AI tokens, update database on finish, and yield SSE."""
+    """Stream AI tokens, update database on finish, track billing usage, and yield SSE."""
     start_time = time.time()
     accumulated_content = []
     accumulated_reasoning = []
     tokens_prompt = 0
     tokens_completion = 0
     resolved_model = model_name
+    actual_provider = "nexora"
+    fallback_used = False
+    fallback_from_model: Optional[str] = None
     routing_reason = ""
     citations_data: List[Dict[str, Any]] = []
+    stream_error: Optional[str] = None
 
-    # Yield initial start event
     yield f"data: {json.dumps({'type': 'start', 'message_id': assistant_message_id, 'conversation_id': conversation_id})}\n\n"
 
     try:
-        # 1. Fetch conversation history and attachments inside isolated session
         async with AsyncSessionLocal() as session:
             conv_q = select(Conversation).where(
                 Conversation.id == conversation_id,
-                Conversation.user_id == user_id
+                Conversation.user_id == user_id,
             )
             conv_res = await session.execute(conv_q)
             conv = conv_res.scalar_one_or_none()
             project_id = conv.project_id if conv else None
 
-            # Fetch recent messages
             msgs_q = (
                 select(Message)
                 .where(
                     Message.conversation_id == conversation_id,
                     Message.id != assistant_message_id,
-                    Message.id != user_message_id
+                    Message.id != user_message_id,
                 )
                 .order_by(Message.created_at.asc())
             )
             msgs_res = await session.execute(msgs_q)
             db_messages = msgs_res.scalars().all()
 
-            # Fetch attachments
             attachments_objs = []
             if attachment_ids:
                 att_q = select(Attachment).where(Attachment.id.in_(attachment_ids))
                 att_res = await session.execute(att_q)
                 attachments_objs = list(att_res.scalars().all())
 
-        # 2. Build LLM message list for prior history
-        history_llm = []
-        for msg in db_messages:
-            history_llm.append(LLMMessage(
+        history_llm = [
+            LLMMessage(
                 role=msg.role,
                 content=msg.content,
-                reasoning_content=msg.reasoning_content
-            ))
+                reasoning_content=msg.reasoning_content,
+            )
+            for msg in db_messages
+        ]
 
-        # 3. Execute 8-stage Advanced Reasoning Flow
         async for chunk in reasoning_orchestrator.execute_reasoning_flow(
             db=session,
             user_id=user_id,
@@ -107,10 +108,16 @@ async def generate_chat_stream(
             reasoning_mode=reasoning_mode,
             web_search=web_search,
             project_id=project_id,
-            attachments=attachments_objs
+            attachments=attachments_objs,
         ):
             if chunk.resolved_model:
                 resolved_model = chunk.resolved_model
+            if chunk.actual_provider:
+                actual_provider = chunk.actual_provider
+            if chunk.fallback_used:
+                fallback_used = True
+                if chunk.fallback_from_model:
+                    fallback_from_model = chunk.fallback_from_model
             if chunk.routing_reason:
                 routing_reason = chunk.routing_reason
             if chunk.citations:
@@ -118,24 +125,50 @@ async def generate_chat_stream(
 
             if chunk.type == "token":
                 accumulated_content.append(chunk.content)
-                yield f"data: {json.dumps({'type': 'token', 'content': chunk.content, 'resolved_model': resolved_model})}\n\n"
+                yield (
+                    "data: "
+                    + json.dumps(
+                        {
+                            "type": "token",
+                            "content": chunk.content,
+                            "resolved_model": resolved_model,
+                            "actual_provider": actual_provider,
+                            "fallback_used": fallback_used,
+                        }
+                    )
+                    + "\n\n"
+                )
 
             elif chunk.type == "reasoning":
                 accumulated_reasoning.append(chunk.content)
-                yield f"data: {json.dumps({'type': 'reasoning', 'content': chunk.content, 'resolved_model': resolved_model})}\n\n"
+                yield (
+                    "data: "
+                    + json.dumps(
+                        {
+                            "type": "reasoning",
+                            "content": chunk.content,
+                            "resolved_model": resolved_model,
+                            "actual_provider": actual_provider,
+                        }
+                    )
+                    + "\n\n"
+                )
 
             elif chunk.type == "usage":
-                # Metadata / Router notification
-                payload = {
+                payload: Dict[str, Any] = {
                     "type": "routing",
                     "resolved_model": resolved_model,
-                    "routing_reason": routing_reason
+                    "actual_provider": actual_provider,
+                    "fallback_used": fallback_used,
+                    "fallback_from_model": fallback_from_model,
+                    "routing_reason": routing_reason,
                 }
                 if citations_data:
                     payload["citations"] = citations_data
                 yield f"data: {json.dumps(payload)}\n\n"
 
             elif chunk.type == "error":
+                stream_error = chunk.content
                 yield f"data: {json.dumps({'type': 'error', 'content': chunk.content})}\n\n"
 
             elif chunk.type == "done":
@@ -146,16 +179,17 @@ async def generate_chat_stream(
 
     except Exception as e:
         logger.exception("Error during LLM streaming")
+        stream_error = str(e)
         yield f"data: {json.dumps({'type': 'error', 'content': f'Streaming interrupted: {str(e)}'})}\n\n"
 
-    # 4. Persist assistant message, routing metadata, citations, and usage
     latency_ms = int((time.time() - start_time) * 1000)
     full_content = "".join(accumulated_content)
     full_reasoning = "".join(accumulated_reasoning) if accumulated_reasoning else None
+    total_tokens = tokens_prompt + tokens_completion
+    estimated_cost = model_registry.calculate_cost(resolved_model, tokens_prompt, tokens_completion)
 
     try:
         async with AsyncSessionLocal() as session:
-            # Update assistant message
             asst_msg = await session.get(Message, assistant_message_id)
             if asst_msg:
                 asst_msg.content = full_content or "No response generated."
@@ -164,10 +198,9 @@ async def generate_chat_stream(
                 asst_msg.routing_reason = routing_reason
                 if citations_data:
                     asst_msg.citations_json = json.dumps(citations_data)
-                asst_msg.tokens_used = tokens_prompt + tokens_completion
+                asst_msg.tokens_used = total_tokens
                 asst_msg.updated_at = datetime.now(timezone.utc)
 
-            # Update conversation timestamp & title if default
             conv = await session.get(Conversation, conversation_id)
             if conv:
                 conv.updated_at = datetime.now(timezone.utc)
@@ -175,21 +208,37 @@ async def generate_chat_stream(
                     clean_title = user_prompt.strip().replace("\n", " ")
                     conv.title = (clean_title[:36] + "...") if len(clean_title) > 36 else clean_title
 
-            # Create usage record
-            usage = UsageRecord(
-                user_id=user_id,
-                conversation_id=conversation_id,
-                message_id=assistant_message_id,
-                model=resolved_model,
-                prompt_tokens=tokens_prompt,
-                completion_tokens=tokens_completion,
-                total_tokens=tokens_prompt + tokens_completion,
-                latency_ms=latency_ms
+            session.add(
+                UsageRecord(
+                    user_id=user_id,
+                    conversation_id=conversation_id,
+                    message_id=assistant_message_id,
+                    model=resolved_model,
+                    prompt_tokens=tokens_prompt,
+                    completion_tokens=tokens_completion,
+                    total_tokens=total_tokens,
+                    latency_ms=latency_ms,
+                )
             )
-            session.add(usage)
+            session.add(
+                ApiUsageLog(
+                    user_id=user_id,
+                    endpoint="/api/v1/messages",
+                    method="POST",
+                    status_code=500 if stream_error else 200,
+                    model=resolved_model,
+                    provider=actual_provider,
+                    prompt_tokens=tokens_prompt,
+                    completion_tokens=tokens_completion,
+                    total_tokens=total_tokens,
+                    cost_usd=estimated_cost,
+                    latency_ms=float(latency_ms),
+                    error_message=stream_error,
+                )
+            )
+            await billing_service.record_consumption(session, user_id, total_tokens, requests_inc=1)
             await session.commit()
 
-            # Automatic memory extraction: check if user expressed an explicit preference
             prompt_lower = user_prompt.lower()
             if any(p in prompt_lower for p in ["i prefer", "remember that", "my name is", "i work as", "always use", "never use"]):
                 try:
@@ -199,7 +248,7 @@ async def generate_chat_stream(
                         content=user_prompt.strip(),
                         memory_type="user_preference",
                         category="preference",
-                        conversation_id=conversation_id
+                        conversation_id=conversation_id,
                     )
                 except Exception as mem_err:
                     logger.debug(f"Auto-memory store skip: {mem_err}")
@@ -207,64 +256,94 @@ async def generate_chat_stream(
     except Exception as e:
         logger.error(f"Failed to persist stream output: {e}")
 
-    yield f"data: {json.dumps({'type': 'done', 'finish_reason': 'stop', 'resolved_model': resolved_model, 'citations': citations_data})}\n\n"
+    yield (
+        "data: "
+        + json.dumps(
+            {
+                "type": "done",
+                "finish_reason": "stop",
+                "resolved_model": resolved_model,
+                "actual_provider": actual_provider,
+                "fallback_used": fallback_used,
+                "fallback_from_model": fallback_from_model,
+                "citations": citations_data,
+                "usage": {
+                    "prompt_tokens": tokens_prompt,
+                    "completion_tokens": tokens_completion,
+                    "total_tokens": total_tokens,
+                    "cost_usd": estimated_cost,
+                },
+            }
+        )
+        + "\n\n"
+    )
 
 
 @router.post("", response_class=StreamingResponse)
 async def send_message(
     data: MessageCreateRequest,
+    request: Request,
     current_user: User = Depends(get_current_user),
-    db: AsyncSession = Depends(get_db)
+    db: AsyncSession = Depends(get_db),
 ):
-    """
-    Send a message and stream the assistant's response via Server-Sent Events (SSE).
-    """
+    """Send a message and stream the assistant's response via Server-Sent Events (SSE)."""
     conversation_id = data.conversation_id
+    requested_model = data.model or settings.DEFAULT_MODEL_ID
 
-    # 1. Resolve or create conversation
     if conversation_id:
         conv_q = select(Conversation).where(
             Conversation.id == conversation_id,
-            Conversation.user_id == current_user.id
+            Conversation.user_id == current_user.id,
         )
         conv_res = await db.execute(conv_q)
         conv = conv_res.scalar_one_or_none()
         if not conv:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
-                detail="Conversation not found or access denied"
+                detail="Conversation not found or access denied",
             )
+        model_name = data.model or conv.model_id or settings.DEFAULT_MODEL_ID
     else:
-        # Auto-create conversation
+        conv = None
+        model_name = requested_model
+
+    # Enforce plan quota, RPM rate limits, and model tier entitlement BEFORE persisting messages
+    await billing_service.enforce_request_gates(
+        db=db,
+        user=current_user,
+        model_id=model_name,
+        is_api_key=False,
+        endpoint="/api/v1/messages",
+        ip_address=request.client.host if request.client else None,
+    )
+
+    if not conv:
         title = data.content.strip()[:36] + "..." if len(data.content.strip()) > 36 else data.content.strip()
         conv = Conversation(
             user_id=current_user.id,
             title=title or "New Chat",
-            model_id=data.model or settings.DEFAULT_MODEL_ID,
+            model_id=model_name,
             reasoning_mode=bool(data.reasoning_mode),
-            web_search_enabled=bool(data.web_search)
+            web_search_enabled=bool(data.web_search),
         )
         db.add(conv)
         await db.flush()
         conversation_id = conv.id
 
-    model_name = data.model or conv.model_id or settings.DEFAULT_MODEL_ID
     reasoning_mode = data.reasoning_mode if data.reasoning_mode is not None else conv.reasoning_mode
     web_search = data.web_search if data.web_search is not None else conv.web_search_enabled
 
-    # 2. Persist User Message
     user_msg = Message(
         conversation_id=conversation_id,
         user_id=current_user.id,
         parent_id=data.parent_id,
         role="user",
         content=data.content,
-        model=model_name
+        model=model_name,
     )
     db.add(user_msg)
     await db.flush()
 
-    # Link attachments if any
     if data.attachment_ids:
         for att_id in data.attachment_ids:
             att = await db.get(Attachment, att_id)
@@ -272,14 +351,13 @@ async def send_message(
                 att.message_id = user_msg.id
                 att.conversation_id = conversation_id
 
-    # 3. Create Placeholder Assistant Message
     asst_msg = Message(
         conversation_id=conversation_id,
         user_id=current_user.id,
         parent_id=user_msg.id,
         role="assistant",
         content="",
-        model=model_name
+        model=model_name,
     )
     db.add(asst_msg)
     await db.commit()
@@ -294,14 +372,14 @@ async def send_message(
             reasoning_mode=reasoning_mode,
             web_search=web_search,
             user_prompt=data.content,
-            attachment_ids=data.attachment_ids
+            attachment_ids=data.attachment_ids,
         ),
         media_type="text/event-stream",
         headers={
             "Cache-Control": "no-cache",
             "Connection": "keep-alive",
-            "X-Accel-Buffering": "no"
-        }
+            "X-Accel-Buffering": "no",
+        },
     )
 
 
@@ -310,7 +388,7 @@ async def edit_message(
     message_id: str,
     data: MessageEditRequest,
     current_user: User = Depends(get_current_user),
-    db: AsyncSession = Depends(get_db)
+    db: AsyncSession = Depends(get_db),
 ):
     """Edit user message content."""
     query = (
@@ -327,7 +405,7 @@ async def edit_message(
     if msg.role != "user":
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Only user messages can be edited"
+            detail="Only user messages can be edited",
         )
 
     msg.content = data.content
@@ -341,8 +419,9 @@ async def edit_message(
 @router.post("/{message_id}/regenerate", response_class=StreamingResponse)
 async def regenerate_message(
     message_id: str,
+    request: Request,
     current_user: User = Depends(get_current_user),
-    db: AsyncSession = Depends(get_db)
+    db: AsyncSession = Depends(get_db),
 ):
     """Regenerate assistant response for a given message or its parent user message."""
     query = select(Message).where(Message.id == message_id, Message.user_id == current_user.id)
@@ -357,13 +436,23 @@ async def regenerate_message(
     if not conv or conv.user_id != current_user.id:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Conversation not found")
 
+    model_name = conv.model_id or settings.DEFAULT_MODEL_ID
+    await billing_service.enforce_request_gates(
+        db=db,
+        user=current_user,
+        model_id=model_name,
+        is_api_key=False,
+        endpoint="/api/v1/messages/regenerate",
+        ip_address=request.client.host if request.client else None,
+    )
+
     if target_msg.role == "assistant":
         user_msg_q = (
             select(Message)
             .where(
                 Message.conversation_id == conversation_id,
                 Message.created_at < target_msg.created_at,
-                Message.role == "user"
+                Message.role == "user",
             )
             .order_by(Message.created_at.desc())
             .limit(1)
@@ -379,7 +468,7 @@ async def regenerate_message(
             parent_id=user_msg.id,
             role="assistant",
             content="",
-            model=conv.model_id
+            model=model_name,
         )
         db.add(asst_msg)
         await db.commit()
@@ -395,16 +484,17 @@ async def regenerate_message(
             conversation_id=conversation_id,
             user_message_id=user_msg.id if user_msg else asst_msg.id,
             assistant_message_id=asst_msg.id,
-            model_name=conv.model_id or settings.DEFAULT_MODEL_ID,
+            model_name=model_name,
             reasoning_mode=conv.reasoning_mode,
             web_search=conv.web_search_enabled,
-            user_prompt=user_prompt
+            user_prompt=user_prompt,
         ),
         media_type="text/event-stream",
         headers={
             "Cache-Control": "no-cache",
-            "Connection": "keep-alive"
-        }
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no",
+        },
     )
 
 
@@ -412,7 +502,7 @@ async def regenerate_message(
 async def delete_message(
     message_id: str,
     current_user: User = Depends(get_current_user),
-    db: AsyncSession = Depends(get_db)
+    db: AsyncSession = Depends(get_db),
 ):
     """Delete a specific message."""
     query = select(Message).where(Message.id == message_id, Message.user_id == current_user.id)

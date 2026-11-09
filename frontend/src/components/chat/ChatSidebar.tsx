@@ -23,6 +23,9 @@ import {
   SlidersHorizontal,
   ChevronLeft,
   FlaskConical,
+  CreditCard,
+  KeyRound,
+  ShieldCheck,
 } from "lucide-react";
 
 interface ChatSidebarProps {
@@ -203,20 +206,57 @@ export const ChatSidebar: React.FC<ChatSidebarProps> = ({
             {showArchived && <span className="text-[10px] font-bold">Active</span>}
           </button>
 
-          {/* Model Lab Navigation */}
-          <Link
-            href="/lab"
-            onClick={onClose}
-            className="w-full flex items-center justify-between px-3 py-1.5 rounded-xl text-xs font-medium text-cyan-600 dark:text-cyan-400 hover:bg-cyan-500/10 border border-cyan-500/20 transition-colors"
-          >
-            <div className="flex items-center gap-2">
-              <FlaskConical className="w-3.5 h-3.5" />
-              <span>NEXORA Model Lab</span>
-            </div>
-            <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-cyan-500/20 text-cyan-300">
-              Lab
-            </span>
-          </Link>
+          {/* Ecosystem Navigation: Billing, Developer API, Lab, Admin */}
+          <div className="grid grid-cols-2 gap-1.5">
+            <Link
+              href="/billing"
+              onClick={onClose}
+              className="flex items-center justify-center gap-1.5 px-2.5 py-1.5 rounded-xl text-[11px] font-medium text-slate-600 dark:text-slate-300 hover:bg-slate-200/60 dark:hover:bg-slate-800 border border-slate-200 dark:border-slate-800 transition-colors"
+            >
+              <CreditCard className="w-3.5 h-3.5 text-emerald-500" />
+              <span>Billing</span>
+            </Link>
+            <Link
+              href="/developer"
+              onClick={onClose}
+              className="flex items-center justify-center gap-1.5 px-2.5 py-1.5 rounded-xl text-[11px] font-medium text-slate-600 dark:text-slate-300 hover:bg-slate-200/60 dark:hover:bg-slate-800 border border-slate-200 dark:border-slate-800 transition-colors"
+            >
+              <KeyRound className="w-3.5 h-3.5 text-indigo-400" />
+              <span>API Keys</span>
+            </Link>
+          </div>
+
+          {(user?.role === "admin" || user?.role === "researcher") && (
+            <Link
+              href="/lab"
+              onClick={onClose}
+              className="w-full flex items-center justify-between px-3 py-1.5 rounded-xl text-xs font-medium text-cyan-600 dark:text-cyan-400 hover:bg-cyan-500/10 border border-cyan-500/20 transition-colors"
+            >
+              <div className="flex items-center gap-2">
+                <FlaskConical className="w-3.5 h-3.5" />
+                <span>NEXORA Model Lab</span>
+              </div>
+              <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-cyan-500/20 text-cyan-300">
+                Lab
+              </span>
+            </Link>
+          )}
+
+          {user?.role === "admin" && (
+            <Link
+              href="/admin"
+              onClick={onClose}
+              className="w-full flex items-center justify-between px-3 py-1.5 rounded-xl text-xs font-medium text-amber-600 dark:text-amber-300 hover:bg-amber-500/10 border border-amber-500/25 transition-colors"
+            >
+              <div className="flex items-center gap-2">
+                <ShieldCheck className="w-3.5 h-3.5" />
+                <span>Admin Control Center</span>
+              </div>
+              <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-300">
+                Admin
+              </span>
+            </Link>
+          )}
 
           {/* User Account / Profile button */}
           {user ? (

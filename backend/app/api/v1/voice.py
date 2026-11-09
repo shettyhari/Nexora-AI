@@ -5,10 +5,13 @@ from fastapi import APIRouter, Depends, File, HTTPException, Response, UploadFil
 from pydantic import BaseModel
 
 from app.api.deps import get_current_user
+from app.core.security_guards import sanitize_filename
 from app.models.user import User
 from app.services.voice.voice_service import voice_intelligence_service
 
 router = APIRouter(prefix="/voice", tags=["Voice Intelligence"])
+ALLOWED_AUDIO_EXTENSIONS = {"mp3", "wav", "m4a", "ogg", "webm", "flac"}
+MAX_AUDIO_BYTES = 25 * 1024 * 1024
 
 
 class SynthesizeRequest(BaseModel):
@@ -28,10 +31,23 @@ async def transcribe_audio_file(
     current_user: User = Depends(get_current_user)
 ):
     """Transcribe spoken audio to text using configured speech-to-text provider."""
-    suffix = f".{file.filename.split('.')[-1]}" if file.filename and "." in file.filename else ".mp3"
+    safe_name = sanitize_filename(file.filename or "audio.mp3")
+    ext = safe_name.rsplit(".", 1)[-1].lower() if "." in safe_name else "mp3"
+    if ext not in ALLOWED_AUDIO_EXTENSIONS:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Unsupported audio format '.{ext}'. Allowed: {', '.join(sorted(ALLOWED_AUDIO_EXTENSIONS))}."
+        )
+    content = await file.read(MAX_AUDIO_BYTES + 1)
+    if len(content) > MAX_AUDIO_BYTES:
+        raise HTTPException(
+            status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+            detail="Audio file exceeds maximum size of 25MB."
+        )
+
+    suffix = f".{ext}"
     with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as tmp:
         tmp_path = tmp.name
-        content = await file.read()
         tmp.write(content)
 
     try:

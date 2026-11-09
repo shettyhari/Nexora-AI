@@ -9,6 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import get_current_user
 from app.core.database import get_db
+from app.core.security_guards import resolve_safe_file_path
 from app.models.attachment import Attachment
 from app.models.media_job import MediaJob
 from app.models.user import User
@@ -39,15 +40,9 @@ class VideoAnalyzeRequest(BaseModel):
 
 
 async def _resolve_file(file_path: Optional[str], attachment_id: Optional[str], user_id: str, db: AsyncSession) -> str:
-    if file_path and os.path.exists(file_path):
-        return file_path
-    if attachment_id:
-        q = select(Attachment).where(Attachment.id == attachment_id, Attachment.user_id == user_id)
-        res = await db.execute(q)
-        att = res.scalar_one_or_none()
-        if att and os.path.exists(att.storage_path):
-            return att.storage_path
-    raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Target media file not found.")
+    return await resolve_safe_file_path(
+        file_path, attachment_id, user_id, db, endpoint="/api/v1/multimodal"
+    )
 
 
 @router.post("/image/analyze")

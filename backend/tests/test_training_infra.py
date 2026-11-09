@@ -304,9 +304,9 @@ print("ALL_METHODS_OK")
 # =====================================================================
 
 @pytest.mark.asyncio
-async def test_training_api_end_to_end_and_openai_serving(client):
+async def test_training_api_end_to_end_and_openai_serving(client, admin_headers):
     """
-    Tests Prompt 5 REST API end-to-end:
+    Tests Prompt 5 REST API end-to-end (with Prompt 6 RBAC & Auth enforcement):
     - Telemetry & Framework inspection
     - License enforcement (blocks non-commercial for commercial use)
     - GPU required enforcement on CPU host
@@ -322,19 +322,20 @@ async def test_training_api_end_to_end_and_openai_serving(client):
 
     try:
         # 1. Telemetry & Frameworks
-        tel_res = await client.get("/api/v1/lab/telemetry")
+        tel_res = await client.get("/api/v1/lab/telemetry", headers=admin_headers)
         assert tel_res.status_code == 200
         tel_data = tel_res.json()
         assert "hardware" in tel_data
         assert tel_data["hardware"]["cpu"]["cores_logical"] >= 1
 
-        fw_res = await client.get("/api/v1/lab/frameworks")
+        fw_res = await client.get("/api/v1/lab/frameworks", headers=admin_headers)
         assert fw_res.status_code == 200
         assert fw_res.json()["frameworks"]["torch"]["installed"] is True
 
         # 2. License Check Rejection (Commercial + NC dataset -> HTTP 400)
         nc_ds_resp = await client.post(
             "/api/v1/lab/datasets/upload",
+            headers=admin_headers,
             data={"name": "NC Dataset", "version": "1.0.0", "license": "CC-BY-NC-4.0", "file_format": "txt"},
             files={"file": ("nc.txt", b"Proprietary non commercial training corpus sample line.", "text/plain")},
         )
@@ -343,6 +344,7 @@ async def test_training_api_end_to_end_and_openai_serving(client):
 
         blocked_job = await client.post(
             "/api/v1/lab/jobs",
+            headers=admin_headers,
             json={
                 "name": "Illegal Commercial Job",
                 "base_model_id": "nexora-nano-v1",
@@ -357,6 +359,7 @@ async def test_training_api_end_to_end_and_openai_serving(client):
         # Verify queued job pause & cancel lifecycle cleanly
         q_job_res = await client.post(
             "/api/v1/lab/jobs",
+            headers=admin_headers,
             json={
                 "name": "Queued Lifecycle Check",
                 "base_model_id": "nexora-nano-v1",
@@ -367,14 +370,15 @@ async def test_training_api_end_to_end_and_openai_serving(client):
         )
         assert q_job_res.status_code == 201
         q_id = q_job_res.json()["id"]
-        assert (await client.post(f"/api/v1/lab/jobs/{q_id}/pause")).json()["status"] == "paused"
-        assert (await client.post(f"/api/v1/lab/jobs/{q_id}/cancel")).json()["status"] == "cancelled"
+        assert (await client.post(f"/api/v1/lab/jobs/{q_id}/pause", headers=admin_headers)).json()["status"] == "paused"
+        assert (await client.post(f"/api/v1/lab/jobs/{q_id}/cancel", headers=admin_headers)).json()["status"] == "cancelled"
         shutil.rmtree(os.path.dirname(q_job_res.json()["log_file_path"]), ignore_errors=True)
 
         # 3. GPU required gate when host is CPU-only
         if not tel_data["hardware"]["gpu_available"]:
             gpu_blocked = await client.post(
                 "/api/v1/lab/jobs",
+                headers=admin_headers,
                 json={
                     "name": "Strict GPU Job",
                     "base_model_id": "nexora-nano-v1",
@@ -387,6 +391,7 @@ async def test_training_api_end_to_end_and_openai_serving(client):
         # 4. Register Base Model & Launch Validated Isolated Fine-Tuning Job
         model_res = await client.post(
             "/api/v1/lab/models",
+            headers=admin_headers,
             json={
                 "name": "NEXORA NANO TEST",
                 "version": "1.0.0",
@@ -402,6 +407,7 @@ async def test_training_api_end_to_end_and_openai_serving(client):
 
         job_res = await client.post(
             "/api/v1/lab/jobs",
+            headers=admin_headers,
             json={
                 "name": "API End-to-End LoRA Run",
                 "base_model_id": model_id,
@@ -422,7 +428,7 @@ async def test_training_api_end_to_end_and_openai_serving(client):
         # 5. Poll isolated child worker until completion
         for _ in range(120):
             await asyncio.sleep(0.5)
-            poll = await client.get(f"/api/v1/lab/jobs/{job_id}")
+            poll = await client.get(f"/api/v1/lab/jobs/{job_id}", headers=admin_headers)
             assert poll.status_code == 200
             job_state = poll.json()
             if job_state["status"] in ("completed", "failed"):
@@ -433,22 +439,26 @@ async def test_training_api_end_to_end_and_openai_serving(client):
         ckpt_id = job_state["output_checkpoint_id"]
         assert ckpt_id
 
-        logs_res = await client.get(f"/api/v1/lab/jobs/{job_id}/logs")
+        logs_res = await client.get(f"/api/v1/lab/jobs/{job_id}/logs", headers=admin_headers)
         assert logs_res.status_code == 200
         assert "Checkpoint validated successfully" in logs_res.json()["logs"]
 
         # 6. Validate, Export & Rollback Checkpoint
-        val_res = await client.post(f"/api/v1/lab/checkpoints/{ckpt_id}/validate")
+        val_res = await client.post(f"/api/v1/lab/checkpoints/{ckpt_id}/validate", headers=admin_headers)
         assert val_res.status_code == 200
         assert val_res.json()["validation_report"]["validated"] is True
 
-        exp_res = await client.post(f"/api/v1/lab/checkpoints/{ckpt_id}/export?target_format=safetensors")
+        exp_res = await client.post(
+            f"/api/v1/lab/checkpoints/{ckpt_id}/export?target_format=safetensors",
+            headers=admin_headers,
+        )
         assert exp_res.status_code == 200
         created_export_dir = exp_res.json()["export"]["export_dir"]
         assert os.path.exists(os.path.join(created_export_dir, "EXPORT_MANIFEST.json"))
 
         rb_res = await client.post(
             f"/api/v1/lab/checkpoints/{ckpt_id}/rollback",
+            headers=admin_headers,
             json={"target_model_id": model_id, "reason": "Verified rollout check"},
         )
         assert rb_res.status_code == 200
@@ -457,6 +467,7 @@ async def test_training_api_end_to_end_and_openai_serving(client):
         # 7. 10-Dimension Benchmark Compare + Human Eval Rating
         bm_res = await client.post(
             "/api/v1/lab/benchmarks/compare",
+            headers=admin_headers,
             json={
                 "name": "E2E LoRA Eval",
                 "candidate_model_name": "NEXORA NANO TEST LoRA",
@@ -472,6 +483,7 @@ async def test_training_api_end_to_end_and_openai_serving(client):
 
         hr_res = await client.post(
             f"/api/v1/lab/benchmarks/{suite['id']}/human-rating",
+            headers=admin_headers,
             json={"evaluator": "qa-lead", "prompt": "Explain GQA", "preference": "candidate", "coherence": 5, "helpfulness": 5},
         )
         assert hr_res.status_code == 200
@@ -480,6 +492,7 @@ async def test_training_api_end_to_end_and_openai_serving(client):
         # 8. Optimization Endpoint
         opt_res = await client.post(
             "/api/v1/lab/optimizations/run",
+            headers=admin_headers,
             json={
                 "checkpoint_id": ckpt_id,
                 "model_name": "NEXORA NANO TEST LoRA",
@@ -498,12 +511,14 @@ async def test_training_api_end_to_end_and_openai_serving(client):
         # 9. Inference Deployment Gate & Independent OpenAI Server (/v1/*)
         bad_dep = await client.post(
             "/api/v1/lab/deployments",
+            headers=admin_headers,
             json={"model_alias": "missing-model", "checkpoint_id": "non-existent-id"},
         )
         assert bad_dep.status_code == 404
 
         dep_res = await client.post(
             "/api/v1/lab/deployments",
+            headers=admin_headers,
             json={
                 "model_alias": "nexora-e2e-serving-v1",
                 "checkpoint_id": ckpt_id,
@@ -515,7 +530,7 @@ async def test_training_api_end_to_end_and_openai_serving(client):
         assert dep_res.status_code == 201, dep_res.text
         dep_id = dep_res.json()["id"]
 
-        models_res = await client.get("/v1/models")
+        models_res = await client.get("/v1/models", headers=admin_headers)
         assert models_res.status_code == 200
         model_ids = [m["id"] for m in models_res.json()["data"]]
         assert "nexora-e2e-serving-v1" in model_ids
@@ -527,6 +542,7 @@ async def test_training_api_end_to_end_and_openai_serving(client):
         # Non-streaming OpenAI Chat Completion
         chat_res = await client.post(
             "/v1/chat/completions",
+            headers=admin_headers,
             json={
                 "model": "nexora-e2e-serving-v1",
                 "messages": [{"role": "user", "content": "Explain grouped query attention"}],
@@ -544,6 +560,7 @@ async def test_training_api_end_to_end_and_openai_serving(client):
         # Streaming SSE Chat Completion
         stream_res = await client.post(
             "/v1/chat/completions",
+            headers=admin_headers,
             json={
                 "model": "nexora-e2e-serving-v1",
                 "messages": [{"role": "user", "content": "Hello"}],
@@ -557,13 +574,14 @@ async def test_training_api_end_to_end_and_openai_serving(client):
         # Text Completion endpoint
         cmpl_res = await client.post(
             "/v1/completions",
+            headers=admin_headers,
             json={"model": "nexora-e2e-serving-v1", "prompt": "Transformers", "max_tokens": 8},
         )
         assert cmpl_res.status_code == 200
         assert cmpl_res.json()["object"] == "text_completion"
 
         # Stop deployment cleanly
-        stop_res = await client.post(f"/api/v1/lab/deployments/{dep_id}/stop")
+        stop_res = await client.post(f"/api/v1/lab/deployments/{dep_id}/stop", headers=admin_headers)
         assert stop_res.status_code == 200
         assert stop_res.json()["status"] == "stopped"
     finally:

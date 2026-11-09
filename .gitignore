@@ -49,11 +49,14 @@ htmlcov/
 nexora.db
 test_nexora.db
 uploads/
+checkpoints/
+backups/
 lab_data/
 lab_checkpoints/
 lab_jobs/
 lab_exports/
 lab_optimized/
+benchmark_tmp.json
 
 # Environment files
 .env

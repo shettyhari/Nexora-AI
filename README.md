@@ -108,7 +108,15 @@ NEXORA AI is a production-grade, full-stack ChatGPT-style neural application bui
 - **Genuine Hardware Telemetry**: Real CPU, RAM, Disk, and GPU telemetry (`pynvml`, `nvidia-smi`, `torch.cuda`, `torch.backends.mps`, `psutil`); honestly reports `"GPU Unavailable"` on CPU hosts without simulation.
 - **Checkpoint Management**: Cryptographic SHA-256 digest verification, weight reload, NaN/Inf scan, forward-pass validation gate, SafeTensors release export (`EXPORT_MANIFEST.json`), and validated rollback.
 - **10-Dimension Comparative Benchmarks & Optimization**: Evaluates base vs. fine-tuned models across 10 core capabilities with 5-gram/SHA-256 **data leakage prevention**, regression gates, human preference ratings, and PyTorch `int8_dynamic` / `bf16` / `fp16` / `int4_nf4` TTFT, throughput, memory, context & batch scaling benchmarks.
-- **Independent OpenAI-Compatible Serving**: Dedicated `/v1/models`, `/v1/health`, `/v1/chat/completions` (JSON + SSE `[DONE]`), and `/v1/completions` endpoints with concurrency semaphores and token accounting. See [`TRAINING_INFRASTRUCTURE.md`](TRAINING_INFRASTRUCTURE.md).
+- **Independent OpenAI-Compatible Serving**: Dedicated `/v1/models`, `/v1/health`, `/v1/embeddings`, `/v1/chat/completions` (JSON + SSE `[DONE]`), and `/v1/completions` endpoints with concurrency semaphores and token accounting. See [`TRAINING_INFRASTRUCTURE.md`](TRAINING_INFRASTRUCTURE.md).
+
+### 12. Production-Grade Independent Commercial AI Ecosystem (Prompt 6)
+- **Proprietary & External Model Integration (`006_production_ecosystem`)**: Zero-downtime Lab-to-Production promotion (`PublishedModel`) via `/api/v1/lab/checkpoints/{id}/publish` & `/api/v1/admin/models/publish-checkpoint` backed by SHA-256 checkpoint verification and truthful zero-masquerading Gateway attribution (`resolved_model`, `actual_provider`, `fallback_used`, `fallback_from_model`).
+- **Commercial Billing, Quotas & Entitlements (`/billing`)**: `free`, `pro`, and `enterprise` tiers (`SubscriptionPlan`), monthly/annual cycles, automatic period reset, paid invoices (`BillingInvoice`), Stripe HMAC-SHA256 webhook verification, sliding-window RPM rate limiting (`SlidingWindowRateLimiter` Redis/in-memory), upload caps (`413`), and monthly token quota gates.
+- **Developer Platform & OpenAI API (`/developer` & `/v1/*`)**: Self-service cryptographic `nex_live_...` API keys stored solely as SHA-256 digests (`DeveloperApiKey`), instant revocation/rotation, and OpenAI SDK-compatible `/v1/models`, `/v1/embeddings`, `/v1/chat/completions`, and `/v1/completions` with real token & cost logging (`ApiUsageLog`).
+- **Administration Control Center (`/admin`)**: Strictly `role == "admin"` RBAC console for managing users/roles/plans, enabling/disabling models and pricing, publishing verified checkpoints, checking provider credentials, inspecting `SecurityEvent` & `AuditLog` feeds, and monitoring infrastructure health.
+- **Hardened Security & GDPR Erasure**: Path confinement (`resolve_safe_file_path`), SVG `nosniff`/`attachment` headers, AST Python sandbox, SSRF perimeter validator, HSTS/CSP-safe security middleware, startup `SECRET_KEY` validation (`validate_production_secrets`), and `DELETE /api/v1/users/me` GDPR data erasure.
+- **Production Infrastructure, Object Storage & Disaster Recovery**: Segmented `docker-compose.prod.yml` (`nginx`, `frontend`, `backend`, `postgres`, `redis`, isolated `worker-training`, read-only `worker-inference`), `S3`/`R2`/`MinIO` + local confined storage (`ObjectStorageService`), Prometheus `GET /metrics`, `.github/workflows/ci.yml`, `backend/scripts/backup_db.py`, and `backend/scripts/benchmark_load.py`.
 
 ---
 
@@ -116,13 +124,31 @@ NEXORA AI is a production-grade, full-stack ChatGPT-style neural application bui
 
 | Layer | Technologies |
 | :--- | :--- |
-| **Frontend** | Next.js 14 (App Router), React 18, TypeScript, Tailwind CSS, Lucide Icons, KaTeX, React Markdown |
-| **Backend** | Python 3.12, FastAPI, Pydantic v2, SQLAlchemy 2.0 Async, Uvicorn, HTTPX |
-| **Database** | PostgreSQL 16 (Production) / SQLite Async (Local Dev), Alembic Migrations |
+| **Frontend** | Next.js 14 (App Router: `/`, `/billing`, `/developer`, `/lab`, `/admin`, `/profile`), React 18, TypeScript, Tailwind CSS, Lucide Icons, KaTeX, React Markdown |
+| **Backend** | Python 3.12, FastAPI, Pydantic v2, SQLAlchemy 2.0 Async, Uvicorn, HTTPX, Boto3 (S3 optional) |
+| **Database** | PostgreSQL 16 (Production) / SQLite Async (Local Dev), Alembic Migrations (`001`–`006`) |
 | **Vector Engine** | pgvector (PostgreSQL) / Cosine Vector Generator (Local Dev) |
 | **Hybrid Search** | BM25Okapi + Dense Vector Embeddings + Reciprocal Rank Fusion |
-| **Cache & Session**| Redis 7 |
-| **AI Providers** | Google Gemini, OpenAI, Anthropic Claude, Hugging Face, Self-Hosted (Ollama/vLLM), NEXORA Local |
+| **Cache & Limits**| Redis 7 (Distributed sliding-window rate limiter & cache with in-memory fallback) |
+| **Edge & Ops** | Nginx 1.27 Reverse Proxy (SSE zero-buffer + rate limits), Docker Compose, GitHub Actions CI, Prometheus `/metrics` |
+| **AI Providers** | Google Gemini, OpenAI, Anthropic Claude, Hugging Face, Self-Hosted (Ollama/vLLM), NEXORA Proprietary & Fine-Tuned Checkpoints |
+
+---
+
+## 📚 Documentation Index
+
+| Document | Scope |
+| :--- | :--- |
+| [`API_DOCS.md`](API_DOCS.md) | Complete REST, SSE, OpenAI `/v1/*`, Billing, Developer, Lab, and Admin API reference |
+| [`PRODUCTION_DEPLOYMENT.md`](PRODUCTION_DEPLOYMENT.md) | Production/Staging env templates, `SECRET_KEY` guards, Docker Compose & Vercel deploys |
+| [`INFRASTRUCTURE.md`](INFRASTRUCTURE.md) | Multi-service topology, internal network isolation, Nginx proxy, S3 storage & CI/CD |
+| [`DATABASE_BACKUP_STRATEGY.md`](DATABASE_BACKUP_STRATEGY.md) | `backup_db.py` (`pg_dump`/SQLite online backup), SHA-256 manifests, PITR & restore procedures |
+| [`MODEL_DEPLOYMENT.md`](MODEL_DEPLOYMENT.md) | Model Lab validation, production promotion bridge, OpenAI serving & rollback |
+| [`TRAINING_INFRASTRUCTURE.md`](TRAINING_INFRASTRUCTURE.md) | Prompt 5 SFT/LoRA/QLoRA/DPO/GRPO training workers & quantization benchmarks |
+| [`SECURITY_AUDIT_REPORT.md`](SECURITY_AUDIT_REPORT.md) | Verified attack-surface controls, audit remediations & hardening checklist |
+| [`PERFORMANCE_REPORT.md`](PERFORMANCE_REPORT.md) | Authentic measured HTTP load (`c=1,10,25`), SSE TTFT, RAG & CSV parse benchmarks |
+| [`OPERATIONAL_RUNBOOKS.md`](OPERATIONAL_RUNBOOKS.md) | SRE playbooks for failover, worker recovery, key compromise, webhooks & DB restore |
+| [`RELEASE_NOTES.md`](RELEASE_NOTES.md) | Complete `v2.0.0` commercial release notes & upgrade steps |
 
 ---
 
@@ -182,14 +208,30 @@ vercel
 
 ---
 
-## 🧪 Automated Testing
+## 🧪 Automated Testing, Benchmarks & Disaster Recovery Drills
 
-Run the complete 83-test backend test suite:
+Run the complete **91-test** backend verification suite:
 ```bash
 cd backend
 pytest -v
 ```
-**Test Suites Covered:**
+
+Validate TypeScript + Next.js production build (`12` App Router routes):
+```bash
+cd frontend
+npm run build
+```
+
+Run live concurrency/latency benchmarks and verified DB backup/restore drills:
+```bash
+cd backend
+python scripts/benchmark_load.py
+python scripts/backup_db.py --verify-test
+```
+
+**Test Suites Covered (`21` test modules, `91` tests):**
+- `test_security_audit.py`: Path traversal (`../../.env`) & cross-tenant file isolation, SVG download `nosniff`/`attachment` headers, plan upload caps (`413`), AST sandbox & SSRF defense, 3-tier RBAC boundaries, API key SHA-256 revocation & plan model gates, Stripe HMAC-SHA256 webhook verification, HTTP security headers, GDPR right-to-erasure (`DELETE /api/v1/users/me`), and truthful Gateway zero-masquerading attribution.
+- `test_ecosystem_e2e.py`: End-to-end commercial registration -> Free/Pro plan upgrade -> invoice emission -> `nex_live_...` API key minting/rotation/revocation -> `/v1/models`, `/v1/embeddings`, `/v1/chat/completions`, `/v1/completions` -> Admin Control Center management -> Model Lab checkpoint validation & live production promotion -> `/metrics` Prometheus check.
 - `test_training_infra.py`: Hardware telemetry (`pynvml`/`nvidia-smi`/PyTorch/`psutil`), ML framework stack inspection & DeepSpeed/NeMo/PEFT configs, license compatibility guard, 10-dimension comparative benchmarks + 5-gram/SHA-256 data leakage prevention, isolated child worker fine-tuning (`lora` pause/resume/validation, `instruction`, `dpo`, `grpo`), SafeTensors checkpoint export/rollback, INT8 dynamic quantization + TTFT benchmarking, and OpenAI-compatible serving (`/v1/models`, `/v1/health`, `/v1/chat/completions`, `/v1/completions`).
 - `test_lab.py`: Foundation model registry, analytical parameter counter, RoPE rotary embeddings, RMSNorm, SwiGLU, cross-entropy loss, dataset NFKC normalization, PII scanning, deduplication, BPE tokenizer training and fertility, hardware profiling, and authentic training run execution.
 - `test_multimodal.py`: Image upload, OCR, screenshot analysis, video timestamp segmentation.

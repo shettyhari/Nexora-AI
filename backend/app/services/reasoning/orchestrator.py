@@ -183,8 +183,18 @@ class ReasoningOrchestrator:
         )
 
         async for chunk in gateway.stream(llm_request):
-            chunk.resolved_model = resolved_model
-            chunk.routing_reason = routing_reason
+            if chunk.fallback_used or not chunk.resolved_model:
+                chunk.resolved_model = chunk.resolved_model or resolved_model
+            elif chunk.resolved_model != resolved_model and chunk.actual_provider == "nexora":
+                # Keep truthful runtime identity reported by provider
+                pass
+            else:
+                chunk.resolved_model = resolved_model
+
+            if not chunk.routing_reason:
+                chunk.routing_reason = routing_reason
+            if not chunk.actual_provider:
+                chunk.actual_provider = routing_decision.provider
             if citations_list and chunk.type == "done":
                 chunk.citations = citations_list
             yield chunk

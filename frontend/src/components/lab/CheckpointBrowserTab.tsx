@@ -10,6 +10,7 @@ import {
   Award,
   RotateCcw,
   AlertCircle,
+  Rocket,
 } from "lucide-react";
 import { api } from "@/lib/api";
 
@@ -80,6 +81,29 @@ export const CheckpointBrowserTab: React.FC<CheckpointBrowserTabProps> = ({
       onRefresh?.();
     } catch (err: any) {
       setFeedback({ type: "err", message: err.message || "Rollback failed" });
+    } finally {
+      setBusyId(null);
+    }
+  };
+
+  const handlePublishToCatalog = async (ckpt: LabCheckpoint) => {
+    setBusyId(ckpt.id);
+    setFeedback(null);
+    const alias = `nexora-lab-${ckpt.id.slice(0, 8)}`;
+    try {
+      await api.publishLabCheckpoint(ckpt.id, {
+        model_id: alias,
+        display_name: `NEXORA Lab Model (Step #${ckpt.step})`,
+        description: `Published proprietary checkpoint v${ckpt.version} from NEXORA Model Lab.`,
+        min_plan_tier: "free",
+      });
+      setFeedback({
+        type: "ok",
+        message: `Checkpoint v${ckpt.version} published to commercial Model Registry as '${alias}'.`,
+      });
+      onRefresh?.();
+    } catch (err: any) {
+      setFeedback({ type: "err", message: err.message || "Publish failed (validate checkpoint first)" });
     } finally {
       setBusyId(null);
     }
@@ -226,6 +250,19 @@ export const CheckpointBrowserTab: React.FC<CheckpointBrowserTabProps> = ({
                         title="Promote this checkpoint as active rollback target"
                       >
                         <RotateCcw className="w-3 h-3 inline mr-0.5" /> Rollback
+                      </button>
+                      <button
+                        type="button"
+                        disabled={busyId === ckpt.id || !ckpt.validated}
+                        onClick={() => handlePublishToCatalog(ckpt)}
+                        className="px-2 py-1 rounded border border-violet-500/30 text-violet-400 hover:bg-violet-500/10 text-[11px] disabled:opacity-40"
+                        title={
+                          ckpt.validated
+                            ? "Publish validated proprietary checkpoint to commercial Model Registry"
+                            : "Validate checkpoint before publishing"
+                        }
+                      >
+                        <Rocket className="w-3 h-3 inline mr-0.5" /> Publish
                       </button>
                     </td>
                   </tr>

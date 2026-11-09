@@ -9,6 +9,13 @@ import {
   Attachment
 } from "@/types/chat";
 import { User, Profile, UserPreference } from "@/types/user";
+import {
+  BillingInvoice,
+  DeveloperApiKey,
+  DeveloperUsageResponse,
+  SubscriptionPlan,
+  SubscriptionResponse,
+} from "@/types/ecosystem";
 
 const API_PREFIX = "/api/v1";
 
@@ -183,6 +190,10 @@ class ApiClient {
       method: "POST",
       body: JSON.stringify({ current_password, new_password }),
     });
+  }
+
+  async deleteMyAccount(): Promise<{ message: string }> {
+    return this.request<{ message: string }>("/users/me", { method: "DELETE" });
   }
 
   // --- Conversations ---
@@ -751,6 +762,163 @@ class ApiClient {
         stream: false,
       }),
     });
+  }
+
+  async publishLabCheckpoint(
+    checkpointId: string,
+    data: {
+      model_id: string;
+      display_name: string;
+      description?: string;
+      min_plan_tier?: string;
+      input_price_per_million?: number;
+      output_price_per_million?: number;
+    }
+  ): Promise<any> {
+    return this.request<any>(`/lab/checkpoints/${checkpointId}/publish`, {
+      method: "POST",
+      body: JSON.stringify(data),
+    });
+  }
+
+  // --- Prompt 6: Billing & Subscriptions ---
+  async getBillingPlans(): Promise<SubscriptionPlan[]> {
+    return this.request<SubscriptionPlan[]>("/billing/plans");
+  }
+
+  async getMySubscription(): Promise<SubscriptionResponse> {
+    return this.request<SubscriptionResponse>("/billing/subscription");
+  }
+
+  async subscribeToPlan(
+    tier: string,
+    billing_cycle: "monthly" | "annual" = "monthly",
+    payment_method_summary = "Card ****4242"
+  ): Promise<any> {
+    return this.request<any>("/billing/subscribe", {
+      method: "POST",
+      body: JSON.stringify({ tier, billing_cycle, payment_method_summary }),
+    });
+  }
+
+  async cancelSubscription(immediate = false): Promise<any> {
+    return this.request<any>("/billing/cancel", {
+      method: "POST",
+      body: JSON.stringify({ immediate }),
+    });
+  }
+
+  async getInvoices(): Promise<BillingInvoice[]> {
+    return this.request<BillingInvoice[]>("/billing/invoices");
+  }
+
+  // --- Prompt 6: Developer Ecosystem & API Keys ---
+  async getDeveloperKeys(): Promise<DeveloperApiKey[]> {
+    return this.request<DeveloperApiKey[]>("/developer/keys");
+  }
+
+  async createDeveloperKey(data: {
+    name: string;
+    scopes?: string[];
+    expires_in_days?: number;
+  }): Promise<DeveloperApiKey> {
+    return this.request<DeveloperApiKey>("/developer/keys", {
+      method: "POST",
+      body: JSON.stringify(data),
+    });
+  }
+
+  async revokeDeveloperKey(keyId: string): Promise<any> {
+    return this.request<any>(`/developer/keys/${keyId}/revoke`, { method: "POST" });
+  }
+
+  async rotateDeveloperKey(keyId: string): Promise<DeveloperApiKey> {
+    return this.request<DeveloperApiKey>(`/developer/keys/${keyId}/rotate`, { method: "POST" });
+  }
+
+  async getDeveloperUsage(): Promise<DeveloperUsageResponse> {
+    return this.request<DeveloperUsageResponse>("/developer/usage");
+  }
+
+  // --- Prompt 6: Admin Control Center ---
+  async getAdminOverview(): Promise<any> {
+    return this.request<any>("/admin/overview");
+  }
+
+  async getAdminUsers(): Promise<any[]> {
+    return this.request<any[]>("/admin/users");
+  }
+
+  async updateAdminUser(userId: string, data: any): Promise<any> {
+    return this.request<any>(`/admin/users/${userId}`, {
+      method: "PATCH",
+      body: JSON.stringify(data),
+    });
+  }
+
+  async getAdminPlans(): Promise<SubscriptionPlan[]> {
+    return this.request<SubscriptionPlan[]>("/admin/plans");
+  }
+
+  async updateAdminPlan(planId: string, data: any): Promise<SubscriptionPlan> {
+    return this.request<SubscriptionPlan>(`/admin/plans/${planId}`, {
+      method: "PATCH",
+      body: JSON.stringify(data),
+    });
+  }
+
+  async getAdminModels(): Promise<any[]> {
+    return this.request<any[]>("/admin/models");
+  }
+
+  async updateAdminModel(modelId: string, data: any): Promise<any> {
+    return this.request<any>(`/admin/models/${modelId}`, {
+      method: "PATCH",
+      body: JSON.stringify(data),
+    });
+  }
+
+  async publishCheckpointAsAdmin(data: {
+    checkpoint_id: string;
+    model_id: string;
+    display_name: string;
+    description?: string;
+    min_plan_tier?: string;
+    input_price_per_million?: number;
+    output_price_per_million?: number;
+  }): Promise<any> {
+    return this.request<any>("/admin/models/publish-checkpoint", {
+      method: "POST",
+      body: JSON.stringify(data),
+    });
+  }
+
+  async getAdminProviders(): Promise<any> {
+    return this.request<any>("/admin/providers");
+  }
+
+  async getAdminAnalytics(): Promise<any> {
+    return this.request<any>("/admin/analytics");
+  }
+
+  async getAdminTrainingAndGpu(): Promise<any> {
+    return this.request<any>("/admin/training-and-gpu");
+  }
+
+  async getAdminAgentActivity(): Promise<any> {
+    return this.request<any>("/admin/agent-activity");
+  }
+
+  async getAdminSecurityEvents(): Promise<any[]> {
+    return this.request<any[]>("/admin/security-events");
+  }
+
+  async getAdminAuditLogs(): Promise<any[]> {
+    return this.request<any[]>("/admin/audit-logs");
+  }
+
+  async getAdminSystemHealth(): Promise<any> {
+    return this.request<any>("/admin/system-health");
   }
 }
 

@@ -72,20 +72,32 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
                     : "hover:bg-slate-100 dark:hover:bg-slate-800/60 text-slate-700 dark:text-slate-300 border border-transparent"
                 }`}
               >
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-1.5 font-semibold text-sm">
-                    {model.provider === "gemini" ? (
-                      <Sparkles className="w-3.5 h-3.5 text-cyan-400" />
+                <div className="flex items-center justify-between gap-2">
+                  <div className="flex items-center gap-1.5 font-semibold text-sm truncate">
+                    {model.provider === "gemini" || model.provider === "google" ? (
+                      <Sparkles className="w-3.5 h-3.5 text-cyan-400 shrink-0" />
                     ) : (
-                      <Bot className="w-3.5 h-3.5 text-indigo-400" />
+                      <Bot className="w-3.5 h-3.5 text-indigo-400 shrink-0" />
                     )}
-                    <span>{model.display_name}</span>
+                    <span className="truncate">{model.display_name}</span>
                   </div>
-                  {model.badge && (
-                    <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-md bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400">
-                      {model.badge}
-                    </span>
-                  )}
+                  <div className="flex items-center gap-1 shrink-0">
+                    {model.is_proprietary && (
+                      <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-cyan-500/15 text-cyan-400 border border-cyan-500/30">
+                        NEXORA
+                      </span>
+                    )}
+                    {model.plan_permitted === false && (
+                      <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-amber-500/15 text-amber-400 border border-amber-500/30 uppercase">
+                        {model.min_plan_tier || "PRO"}
+                      </span>
+                    )}
+                    {model.badge && (
+                      <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-md bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400">
+                        {model.badge}
+                      </span>
+                    )}
+                  </div>
                 </div>
                 {model.description && (
                   <p className="mt-1 text-xs text-slate-500 dark:text-slate-400 leading-snug">

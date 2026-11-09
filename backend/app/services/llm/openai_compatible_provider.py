@@ -28,9 +28,29 @@ class OpenAICompatibleProvider(BaseLLMProvider):
         base_url: Optional[str] = None,
         api_key: Optional[str] = None
     ):
-        self.base_url = (base_url or settings.OPENAI_COMPATIBLE_BASE_URL or "http://localhost:11434/v1").rstrip("/")
-        self.api_key = api_key or settings.OPENAI_COMPATIBLE_API_KEY or "ollama"
+        self._explicit_base_url = base_url.rstrip("/") if base_url is not None else None
+        self._explicit_api_key = api_key
         self.provider_name = "openai_compatible"
+
+    @property
+    def base_url(self) -> str:
+        if self._explicit_base_url is not None:
+            return self._explicit_base_url
+        return (settings.OPENAI_COMPATIBLE_BASE_URL or "http://localhost:11434/v1").rstrip("/")
+
+    @base_url.setter
+    def base_url(self, value: Optional[str]) -> None:
+        self._explicit_base_url = value.rstrip("/") if value is not None else None
+
+    @property
+    def api_key(self) -> str:
+        if self._explicit_api_key is not None:
+            return self._explicit_api_key
+        return settings.OPENAI_COMPATIBLE_API_KEY or "ollama"
+
+    @api_key.setter
+    def api_key(self, value: Optional[str]) -> None:
+        self._explicit_api_key = value
 
     def is_configured(self) -> bool:
         return bool(self.base_url and len(self.base_url) > 5)

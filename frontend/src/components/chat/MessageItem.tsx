@@ -135,6 +135,17 @@ export const MessageItem: React.FC<MessageItemProps> = ({
                 >
                   <Cpu className="w-2.5 h-2.5 text-cyan-500" />
                   <span>{message.model}</span>
+                  {message.actual_provider && (
+                    <span className="opacity-70">({message.actual_provider})</span>
+                  )}
+                </span>
+              )}
+              {!isUser && message.fallback_used && (
+                <span
+                  title={message.routing_reason || `Fallback from ${message.fallback_from_model}`}
+                  className="px-2 py-0.5 rounded-full bg-amber-500/10 text-amber-600 dark:text-amber-400 text-[10px] font-semibold border border-amber-500/30"
+                >
+                  Fallback from {message.fallback_from_model || "unavailable provider"}
                 </span>
               )}
             </div>
@@ -211,7 +222,7 @@ export const MessageItem: React.FC<MessageItemProps> = ({
                         <span className="font-semibold text-cyan-500">
                           [{c.source_id || c.id || idx + 1}]
                         </span>
-                        {c.url && (
+                        {c.url && /^https?:\/\//i.test(c.url) && (
                           <a
                             href={c.url}
                             target="_blank"

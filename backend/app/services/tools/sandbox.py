@@ -38,14 +38,15 @@ class CodeASTAnalyzer:
     """Static AST analyzer for Python code to detect unsafe execution patterns."""
 
     FORBIDDEN_MODULES: Set[str] = {
-        "os", "posix", "nt", "subprocess", "socket", "ctypes", "pty",
-        "multiprocessing", "threading", "signal", "fcntl", "winreg",
-        "shutil", "tempfile_unrestricted", "importlib", "pickle"
+        "os", "posix", "nt", "sys", "pathlib", "io", "subprocess", "socket",
+        "socketserver", "ctypes", "pty", "multiprocessing", "threading",
+        "signal", "fcntl", "winreg", "shutil", "tempfile_unrestricted",
+        "importlib", "pickle", "urllib", "http", "requests", "httpx"
     }
 
     FORBIDDEN_CALLS: Set[str] = {
-        "eval", "exec", "__import__", "compile", "breakpoint",
-        "globals", "locals", "super", "getattr", "setattr", "delattr"
+        "open", "eval", "exec", "__import__", "compile", "breakpoint",
+        "globals", "locals", "vars", "dir", "super", "getattr", "setattr", "delattr"
     }
 
     FORBIDDEN_ATTRIBUTES: Set[str] = {
@@ -131,18 +132,34 @@ class SSRFValidator:
         if parsed.scheme.lower() not in ("http", "https"):
             return False, f"Scheme '{parsed.scheme}' is not allowed. Only HTTP and HTTPS are permitted."
 
+        if parsed.username or parsed.password:
+            return False, "Embedded URL credentials are prohibited to prevent SSRF bypasses."
+
         hostname = parsed.hostname
         if not hostname:
             return False, "URL has no valid hostname."
 
-        if hostname.lower() in cls.DISALLOWED_HOSTNAMES:
+        lower_host = hostname.lower().rstrip(".")
+        if lower_host in cls.DISALLOWED_HOSTNAMES or lower_host.endswith((".local", ".internal", ".localhost")):
             return False, f"Access to internal hostname '{hostname}' is blocked."
 
-        # Check if hostname directly is an IP address
+        # Detect obfuscated integer / hex / octal IP representations (e.g. http://2130706433 or 0x7f000001)
+        try:
+            if lower_host.startswith("0x") or lower_host.isdigit():
+                int_ip = int(lower_host, 16 if lower_host.startswith("0x") else 10)
+                ip_obj = ipaddress.ip_address(int_ip)
+                for net in cls.PRIVATE_NETWORKS:
+                    if ip_obj in net or getattr(ip_obj, "ipv4_mapped", None) in net:
+                        return False, f"Obfuscated private IP '{hostname}' is blocked."
+        except ValueError:
+            pass
+
+        # Check if hostname directly is an IP address (including IPv4-mapped IPv6)
         try:
             ip_obj = ipaddress.ip_address(hostname)
+            mapped = getattr(ip_obj, "ipv4_mapped", None)
             for net in cls.PRIVATE_NETWORKS:
-                if ip_obj in net:
+                if ip_obj in net or (mapped is not None and mapped in net):
                     return False, f"Direct access to private IP '{hostname}' is blocked."
         except ValueError:
             # Hostname is a domain, resolve with strict timeout

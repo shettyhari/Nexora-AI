@@ -12,6 +12,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy import desc, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.api.deps import require_lab_access
 from app.core.database import get_db
 from app.lab.architecture.config import TransformerConfig
 from app.lab.architecture.param_counter import ParameterCounter
@@ -30,7 +31,11 @@ from app.models.lab import (
     LabTokenizer,
 )
 
-router = APIRouter(prefix="/lab", tags=["Model Lab"])
+router = APIRouter(
+    prefix="/lab",
+    tags=["Model Lab"],
+    dependencies=[Depends(require_lab_access)],
+)
 
 
 # --- Schemas ---

@@ -12,9 +12,11 @@ class Settings(BaseSettings):
     )
 
     APP_NAME: str = "NEXORA AI"
-    APP_VERSION: str = "1.0.0"
+    APP_VERSION: str = "2.0.0"
     API_V1_PREFIX: str = "/api/v1"
     DEBUG: bool = False
+    ENVIRONMENT: str = "development"  # development, staging, production
+    STRICT_SECRET_VALIDATION: bool = False
 
     # Security & Tokens
     SECRET_KEY: str = "nexora_ai_super_secret_jwt_encryption_key_change_in_production_2026"
@@ -91,6 +93,26 @@ class Settings(BaseSettings):
     SERPAPI_API_KEY: str = ""
     ENABLE_WEB_SEARCH: bool = True
 
+    # Object Storage (S3-compatible or local fallback)
+    STORAGE_BACKEND: str = "local"  # "local" or "s3"
+    S3_ENDPOINT_URL: str = ""
+    S3_BUCKET: str = "nexora-assets"
+    S3_ACCESS_KEY_ID: str = ""
+    S3_SECRET_ACCESS_KEY: str = ""
+    S3_REGION: str = "us-east-1"
+    BACKUP_DIR: str = "./backups"
+
+    # Commercial Billing & Payment Provider
+    PAYMENT_PROVIDER: str = "local"  # "local" or "stripe"
+    STRIPE_SECRET_KEY: str = ""
+    STRIPE_WEBHOOK_SECRET: str = ""
+
+    # Rate Limiting & Browser Security
+    RATE_LIMIT_ENABLED: bool = True
+    RATE_LIMIT_DEFAULT_RPM: int = 120
+    RATE_LIMIT_AUTH_RPM: int = 30
+    ALLOWED_BROWSER_DOMAINS: List[str] = []
+
     @field_validator("CORS_ORIGINS", mode="before")
     @classmethod
     def assemble_cors_origins(cls, v: Union[str, List[str]]) -> List[str]:
@@ -99,6 +121,28 @@ class Settings(BaseSettings):
         elif isinstance(v, list):
             return v
         return ["http://localhost:3000", "http://127.0.0.1:3000"]
+
+    @field_validator("ALLOWED_BROWSER_DOMAINS", mode="before")
+    @classmethod
+    def assemble_browser_domains(cls, v: Union[str, List[str]]) -> List[str]:
+        if isinstance(v, str) and not v.startswith("["):
+            return [i.strip().lower() for i in v.split(",") if i.strip()]
+        elif isinstance(v, list):
+            return [str(i).strip().lower() for i in v if str(i).strip()]
+        return []
+
+    def validate_production_secrets(self) -> List[str]:
+        """Validate critical security settings before running in production."""
+        issues: List[str] = []
+        default_secret = "nexora_ai_super_secret_jwt_encryption_key_change_in_production_2026"
+        if self.SECRET_KEY == default_secret:
+            issues.append("SECRET_KEY is using the built-in development default.")
+        if len(self.SECRET_KEY) < 32:
+            issues.append("SECRET_KEY is shorter than 32 characters.")
+        if self.ENVIRONMENT.lower() == "production" or self.STRICT_SECRET_VALIDATION:
+            if issues:
+                raise RuntimeError(f"Production security configuration invalid: {'; '.join(issues)}")
+        return issues
 
 
 settings = Settings()

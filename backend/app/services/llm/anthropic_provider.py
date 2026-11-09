@@ -24,9 +24,19 @@ class AnthropicProvider(BaseLLMProvider):
     """Anthropic Claude LLM provider for NEXORA AI."""
 
     def __init__(self, api_key: Optional[str] = None):
-        self.api_key = api_key or settings.ANTHROPIC_API_KEY
+        self._explicit_api_key = api_key
         self.base_url = "https://api.anthropic.com/v1"
         self.provider_name = "anthropic"
+
+    @property
+    def api_key(self) -> Optional[str]:
+        if self._explicit_api_key is not None:
+            return self._explicit_api_key
+        return settings.ANTHROPIC_API_KEY
+
+    @api_key.setter
+    def api_key(self, value: Optional[str]) -> None:
+        self._explicit_api_key = value
 
     def is_configured(self) -> bool:
         return bool(self.api_key and len(self.api_key.strip()) > 5)

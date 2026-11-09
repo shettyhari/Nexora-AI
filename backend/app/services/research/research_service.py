@@ -41,10 +41,14 @@ class WebResearchService:
 
     PROMPT_INJECTION_PATTERNS = [
         re.compile(r"ignore\s+(all\s+)?previous\s+instructions", re.IGNORECASE),
+        re.compile(r"ignore\s+all\s+rules", re.IGNORECASE),
         re.compile(r"system\s*prompt\s*override", re.IGNORECASE),
+        re.compile(r"reveal\s+(the\s+)?system\s*prompt", re.IGNORECASE),
         re.compile(r"you\s+are\s+now\s+in\s+developer\s+mode", re.IGNORECASE),
         re.compile(r"disregard\s+prior\s+directives", re.IGNORECASE),
         re.compile(r"roleplay\s+as\s+an\s+unrestricted\s+ai", re.IGNORECASE),
+        re.compile(r"<\|im_start\|>|<\|im_end\|>|<\|system\|>|\[INST\]|\[/INST\]", re.IGNORECASE),
+        re.compile(r"bypass\s+(all\s+)?security(\s+checks)?", re.IGNORECASE),
     ]
 
     USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36 NEXORA-Research/1.0"

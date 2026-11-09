@@ -26,6 +26,15 @@ from app.models.lab import (
     LabOptimizationRun,
     LabInferenceDeployment,
 )
+from app.models.ecosystem import (
+    SubscriptionPlan,
+    UserSubscription,
+    BillingInvoice,
+    DeveloperApiKey,
+    ApiUsageLog,
+    SecurityEvent,
+    PublishedModel,
+)
 
 __all__ = [
     "User",
@@ -57,4 +66,11 @@ __all__ = [
     "LabBenchmarkSuite",
     "LabOptimizationRun",
     "LabInferenceDeployment",
+    "SubscriptionPlan",
+    "UserSubscription",
+    "BillingInvoice",
+    "DeveloperApiKey",
+    "ApiUsageLog",
+    "SecurityEvent",
+    "PublishedModel",
 ]

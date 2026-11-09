@@ -10,6 +10,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy import desc, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.api.deps import require_lab_access
 from app.core.database import get_db
 from app.lab.checkpoints.manager import CheckpointManager
 from app.lab.evaluation.benchmark import BenchmarkEvaluator
@@ -28,7 +29,11 @@ from app.models.lab import (
     LabTrainingJob,
 )
 
-router = APIRouter(prefix="/lab", tags=["Model Lab Training & Infrastructure"])
+router = APIRouter(
+    prefix="/lab",
+    tags=["Model Lab Training & Infrastructure"],
+    dependencies=[Depends(require_lab_access)],
+)
 
 
 # --- Request Schemas ---
@@ -544,4 +549,99 @@ async def run_model_optimization(payload: RunOptimizationRequest, db: AsyncSessi
     await db.commit()
     await db.refresh(run_rec)
     return run_rec
+
+
+class PublishCheckpointRequest(BaseModel):
+    model_id: str
+    display_name: str
+    description: str = "Proprietary NEXORA fine-tuned foundation checkpoint"
+    min_plan_tier: str = "free"
+    input_price_per_million: float = 0.50
+    output_price_per_million: float = 1.50
+    supports_reasoning: bool = True
+    supports_vision: bool = False
+
+
+@router.post("/checkpoints/{checkpoint_id}/publish", status_code=status.HTTP_201_CREATED)
+async def publish_checkpoint_to_catalog(
+    checkpoint_id: str,
+    payload: PublishCheckpointRequest,
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Validate and publish an approved NEXORA Model Lab checkpoint into
+    PublishedModel & the live ModelRegistry / Gateway catalog.
+    """
+    from app.models.ecosystem import PublishedModel
+    from app.services.model_registry.registry import model_registry
+
+    c_res = await db.execute(select(LabCheckpoint).where(LabCheckpoint.id == checkpoint_id))
+    ckpt = c_res.scalar_one_or_none()
+    if not ckpt:
+        raise HTTPException(status_code=404, detail="Checkpoint not found")
+
+    val_report = CheckpointManager.validate_checkpoint(
+        ckpt.storage_path, expected_sha256=ckpt.weights_sha256 or None
+    )
+    if not val_report.get("validated"):
+        raise HTTPException(
+            status_code=400,
+            detail=f"Refusing to publish unvalidated checkpoint: {val_report.get('error')}",
+        )
+    ckpt.validated = True
+    ckpt.validation_report = val_report
+
+    existing = await db.get(PublishedModel, payload.model_id)
+    if existing:
+        existing.display_name = payload.display_name
+        existing.description = payload.description
+        existing.checkpoint_id = ckpt.id
+        existing.deployment_alias = payload.model_id
+        existing.min_plan_tier = payload.min_plan_tier
+        existing.input_price_per_million = payload.input_price_per_million
+        existing.output_price_per_million = payload.output_price_per_million
+        existing.supports_reasoning = payload.supports_reasoning
+        existing.supports_vision = payload.supports_vision
+        existing.is_enabled = True
+        existing.is_proprietary = True
+        existing.approval_status = "approved"
+        pub = existing
+    else:
+        pub = PublishedModel(
+            id=payload.model_id,
+            display_name=payload.display_name,
+            description=payload.description,
+            provider="nexora",
+            version=ckpt.version,
+            checkpoint_id=ckpt.id,
+            deployment_alias=payload.model_id,
+            context_window=32768,
+            max_output_tokens=4096,
+            input_price_per_million=payload.input_price_per_million,
+            output_price_per_million=payload.output_price_per_million,
+            supports_vision=payload.supports_vision,
+            supports_reasoning=payload.supports_reasoning,
+            min_plan_tier=payload.min_plan_tier,
+            is_enabled=True,
+            is_proprietary=True,
+            approval_status="approved",
+        )
+        db.add(pub)
+
+    await db.commit()
+    await db.refresh(pub)
+
+    model_registry.sync_published_models([pub], checkpoint_paths={ckpt.id: ckpt.storage_path})
+    return {
+        "published": True,
+        "model": {
+            "id": pub.id,
+            "display_name": pub.display_name,
+            "provider": pub.provider,
+            "version": pub.version,
+            "checkpoint_id": pub.checkpoint_id,
+            "min_plan_tier": pub.min_plan_tier,
+            "is_enabled": pub.is_enabled,
+        },
+    }
 

@@ -65,6 +65,9 @@ class LLMStreamChunk(BaseModel):
     finish_reason: Optional[str] = None
     usage: Optional[LLMUsage] = None
     resolved_model: Optional[str] = None
+    actual_provider: Optional[str] = None
+    fallback_used: bool = False
+    fallback_from_model: Optional[str] = None
     routing_reason: Optional[str] = None
     citations: Optional[List[Dict[str, Any]]] = None
 
@@ -74,6 +77,9 @@ class LLMResponse(BaseModel):
     reasoning_content: Optional[str] = None
     tool_calls: Optional[List[ToolCall]] = None
     model: str = ""
+    actual_provider: str = "nexora"
+    fallback_used: bool = False
+    fallback_from_model: Optional[str] = None
     finish_reason: str = "stop"
     usage: LLMUsage = Field(default_factory=LLMUsage)
     structured_output: Optional[Any] = None

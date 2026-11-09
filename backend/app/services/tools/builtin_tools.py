@@ -1,6 +1,7 @@
 import json
 import time
 from typing import Any, Dict, List, Optional
+from app.core.security_guards import ensure_safe_storage_path
 from app.services.document.document_service import document_intelligence_service
 from app.services.multimodal.image_service import image_intelligence_service
 from app.services.multimodal.video_service import video_intelligence_service
@@ -112,7 +113,8 @@ class DocumentExtractTool(BaseTool):
         path = params.get("file_path", "")
         name = params.get("file_name")
         try:
-            doc = document_intelligence_service.parse_file(path, name)
+            safe_path = ensure_safe_storage_path(path)
+            doc = document_intelligence_service.parse_file(safe_path, name)
             return ToolExecutionResult(
                 tool_id=self.tool_id,
                 status="completed",
@@ -158,8 +160,10 @@ class DocumentCompareTool(BaseTool):
     async def execute(self, params: Dict[str, Any], context: ToolExecutionContext) -> ToolExecutionResult:
         start = time.time()
         try:
-            doc1 = document_intelligence_service.parse_file(params["file_path_1"])
-            doc2 = document_intelligence_service.parse_file(params["file_path_2"])
+            safe_p1 = ensure_safe_storage_path(params["file_path_1"])
+            safe_p2 = ensure_safe_storage_path(params["file_path_2"])
+            doc1 = document_intelligence_service.parse_file(safe_p1)
+            doc2 = document_intelligence_service.parse_file(safe_p2)
             comp = document_intelligence_service.compare_documents(doc1, doc2, params.get("focus_topic"))
             return ToolExecutionResult(
                 tool_id=self.tool_id,
@@ -234,8 +238,9 @@ class OCRImageTool(BaseTool):
     async def execute(self, params: Dict[str, Any], context: ToolExecutionContext) -> ToolExecutionResult:
         start = time.time()
         try:
+            safe_path = ensure_safe_storage_path(params["file_path"])
             res = await image_intelligence_service.analyze_image(
-                file_path=params["file_path"],
+                file_path=safe_path,
                 prompt=params.get("prompt", "Analyze this image."),
                 analysis_type=params.get("analysis_type", "general")
             )

@@ -35,6 +35,9 @@ export interface Message {
   content: string;
   reasoning_content?: string | null;
   model?: string | null;
+  actual_provider?: string | null;
+  fallback_used?: boolean;
+  fallback_from_model?: string | null;
   routing_reason?: string | null;
   citations?: CitationItem[] | null;
   tokens_used: number;
@@ -78,6 +81,13 @@ export interface ModelConfig {
   supports_reasoning: boolean;
   is_enabled: boolean;
   is_default: boolean;
+  is_proprietary?: boolean;
+  min_plan_tier?: string;
+  plan_permitted?: boolean;
+  pricing?: {
+    input_per_million: number;
+    output_per_million: number;
+  };
   description?: string;
   badge?: string;
 }
@@ -88,12 +98,16 @@ export interface StreamEvent {
   message_id?: string;
   conversation_id?: string;
   resolved_model?: string;
+  actual_provider?: string;
+  fallback_used?: boolean;
+  fallback_from_model?: string;
   routing_reason?: string;
   citations?: CitationItem[];
   usage?: {
     prompt_tokens: number;
     completion_tokens: number;
     total_tokens: number;
+    cost_usd?: number;
   };
 }
 

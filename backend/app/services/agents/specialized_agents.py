@@ -166,8 +166,33 @@ class BrowserAgent(BaseAgent):
     available_tools = ["web_extract"]
 
     async def process(self, task: str, context: Dict[str, Any], step_number: int = 1) -> AgentStepResult:
+        import urllib.parse
+        from app.core.config import settings
+        from app.services.tools.sandbox import SSRFValidator
+
         start = time.time()
         target_url = context.get("url", "https://en.wikipedia.org")
+        is_safe, reason = SSRFValidator.validate_url(target_url)
+        if not is_safe:
+            return AgentStepResult(
+                step_number=step_number,
+                agent_type=self.agent_type,
+                status="blocked",
+                output=f"Browser security policy blocked navigation: {reason}",
+                execution_time_ms=(time.time() - start) * 1000,
+            )
+
+        if settings.ALLOWED_BROWSER_DOMAINS:
+            host = (urllib.parse.urlparse(target_url).hostname or "").lower()
+            if not any(host == d or host.endswith(f".{d}") for d in settings.ALLOWED_BROWSER_DOMAINS):
+                return AgentStepResult(
+                    step_number=step_number,
+                    agent_type=self.agent_type,
+                    status="blocked",
+                    output=f"Browser domain allowlist blocked navigation to '{host}'.",
+                    execution_time_ms=(time.time() - start) * 1000,
+                )
+
         tool_results = []
 
         extract_tool = tool_registry.get_tool("web_extract")

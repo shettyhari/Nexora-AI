@@ -16,11 +16,12 @@ import {
   AlertCircle,
   Save,
   Loader2,
+  Trash2,
 } from "lucide-react";
 
 export default function ProfilePage() {
   const router = useRouter();
-  const { user, loading, updateProfile, updatePreferences } = useAuth();
+  const { user, loading, logout, updateProfile, updatePreferences } = useAuth();
 
   const [displayName, setDisplayName] = useState("");
   const [bio, setBio] = useState("");
@@ -40,6 +41,7 @@ export default function ProfilePage() {
   const [error, setError] = useState<string | null>(null);
   const [savingProfile, setSavingProfile] = useState(false);
   const [savingPassword, setSavingPassword] = useState(false);
+  const [deletingAccount, setDeletingAccount] = useState(false);
 
   useEffect(() => {
     if (!loading && !user) {
@@ -317,6 +319,42 @@ export default function ProfilePage() {
             </button>
           </div>
         </form>
+
+        {/* Section 3: GDPR Account & Data Erasure */}
+        <div className="p-6 md:p-8 rounded-3xl border border-rose-500/30 bg-rose-500/5 shadow-xl space-y-4">
+          <div className="flex items-center justify-between gap-2 pb-3 border-b border-rose-500/20">
+            <div>
+              <h2 className="text-base font-bold text-rose-500 flex items-center gap-2">
+                <Trash2 className="w-4 h-4" /> Data Privacy &amp; Account Deletion
+              </h2>
+              <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
+                Permanently erase your user account, conversations, uploaded files, RAG documents, API keys, and billing subscription. This action is irreversible.
+              </p>
+            </div>
+            <button
+              type="button"
+              disabled={deletingAccount}
+              onClick={async () => {
+                if (!window.confirm("Are you certain you want to permanently delete your NEXORA account and all associated data?")) {
+                  return;
+                }
+                setDeletingAccount(true);
+                setError(null);
+                try {
+                  await api.deleteMyAccount();
+                  await logout();
+                  router.push("/login");
+                } catch (err: any) {
+                  setError(err.message || "Failed to delete account");
+                  setDeletingAccount(false);
+                }
+              }}
+              className="shrink-0 px-4 py-2 rounded-xl bg-rose-600 hover:bg-rose-500 text-white font-semibold text-xs transition-colors disabled:opacity-50"
+            >
+              {deletingAccount ? "Deleting..." : "Delete My Account"}
+            </button>
+          </div>
+        </div>
       </div>
     </div>
   );

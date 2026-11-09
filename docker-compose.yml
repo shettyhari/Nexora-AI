@@ -13,8 +13,9 @@ services:
       - "5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
+      - ./backups:/backups
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U postgres -d nexora"]
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres} -d ${POSTGRES_DB:-nexora}"]
       interval: 5s
       timeout: 5s
       retries: 5
@@ -45,6 +46,7 @@ services:
       redis:
         condition: service_healthy
     environment:
+      ENVIRONMENT: ${ENVIRONMENT:-development}
       DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@postgres:5432/${POSTGRES_DB:-nexora}
       REDIS_URL: redis://redis:6379/0
       SECRET_KEY: ${SECRET_KEY:-nexora_ai_super_secret_jwt_encryption_key_change_in_production_2026}
@@ -52,14 +54,74 @@ services:
       OPENAI_API_KEY: ${OPENAI_API_KEY:-}
       ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
       GROQ_API_KEY: ${GROQ_API_KEY:-}
+      HUGGINGFACE_API_KEY: ${HUGGINGFACE_API_KEY:-}
       TAVILY_API_KEY: ${TAVILY_API_KEY:-}
-      CORS_ORIGINS: "http://localhost:3000,http://127.0.0.1:3000"
+      STORAGE_BACKEND: ${STORAGE_BACKEND:-local}
+      PAYMENT_PROVIDER: ${PAYMENT_PROVIDER:-local}
+      STRIPE_WEBHOOK_SECRET: ${STRIPE_WEBHOOK_SECRET:-}
+      CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:3000,http://127.0.0.1:3000}
     ports:
       - "8000:8000"
     volumes:
       - ./backend/uploads:/app/uploads
+      - ./backend/lab_jobs:/app/lab_jobs
+      - ./backend/lab_checkpoints:/app/lab_checkpoints
+      - ./backend/lab_exports:/app/lab_exports
+      - ./backups:/app/backups
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://localhost:8000/health || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
     command: >
       sh -c "alembic upgrade head && uvicorn app.main:app --host 0.0.0.0 --port 8000"
+
+  worker-training:
+    profiles: ["ml-workers"]
+    build:
+      context: ./backend
+      dockerfile: Dockerfile.worker
+    container_name: nexora-worker-training
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    environment:
+      ENVIRONMENT: ${ENVIRONMENT:-development}
+      NEXORA_IN_ML_WORKER: "1"
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@postgres:5432/${POSTGRES_DB:-nexora}
+      REDIS_URL: redis://redis:6379/0
+    volumes:
+      - ./backend/lab_jobs:/app/lab_jobs
+      - ./backend/lab_checkpoints:/app/lab_checkpoints
+      - ./backend/lab_data:/app/lab_data
+      - ./backend/lab_exports:/app/lab_exports
+      - ./backend/lab_optimized:/app/lab_optimized
+    command: >
+      sh -c "python -c 'import time, app.lab.training.worker_runner as w; print(\"Isolated Training Worker Standby\"); [time.sleep(60) for _ in iter(int, 1)]'"
+
+  worker-inference:
+    profiles: ["ml-workers"]
+    build:
+      context: ./backend
+      dockerfile: Dockerfile.worker
+    container_name: nexora-worker-inference
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      ENVIRONMENT: ${ENVIRONMENT:-development}
+      NEXORA_IN_ML_WORKER: "1"
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@postgres:5432/${POSTGRES_DB:-nexora}
+      REDIS_URL: redis://redis:6379/0
+    ports:
+      - "8001:8001"
+    volumes:
+      - ./backend/lab_checkpoints:/app/lab_checkpoints:ro
+      - ./backend/lab_optimized:/app/lab_optimized:ro
 
   frontend:
     build:
@@ -68,13 +130,18 @@ services:
     container_name: nexora-frontend
     restart: unless-stopped
     depends_on:
-      - backend
+      backend:
+        condition: service_healthy
     environment:
-      NEXT_PUBLIC_API_URL: http://backend:8000
+      NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:8000}
     ports:
       - "3000:3000"
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:3000/ || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
 
 volumes:
   postgres_data:
   redis_data:
-

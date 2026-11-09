@@ -23,9 +23,29 @@ class HuggingFaceProvider(BaseLLMProvider):
     """Hugging Face Inference API / Dedicated Endpoints provider."""
 
     def __init__(self, api_key: Optional[str] = None, endpoint_url: Optional[str] = None):
-        self.api_key = api_key or settings.HUGGINGFACE_API_KEY
-        self.endpoint_url = endpoint_url or settings.HUGGINGFACE_ENDPOINT_URL
+        self._explicit_api_key = api_key
+        self._explicit_endpoint_url = endpoint_url
         self.provider_name = "huggingface"
+
+    @property
+    def api_key(self) -> Optional[str]:
+        if self._explicit_api_key is not None:
+            return self._explicit_api_key
+        return settings.HUGGINGFACE_API_KEY
+
+    @api_key.setter
+    def api_key(self, value: Optional[str]) -> None:
+        self._explicit_api_key = value
+
+    @property
+    def endpoint_url(self) -> Optional[str]:
+        if self._explicit_endpoint_url is not None:
+            return self._explicit_endpoint_url
+        return settings.HUGGINGFACE_ENDPOINT_URL
+
+    @endpoint_url.setter
+    def endpoint_url(self, value: Optional[str]) -> None:
+        self._explicit_endpoint_url = value
 
     def is_configured(self) -> bool:
         return bool(self.api_key and len(self.api_key.strip()) > 5)

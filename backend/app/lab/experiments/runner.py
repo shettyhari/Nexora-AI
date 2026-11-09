@@ -141,9 +141,9 @@ class TrainingRunner:
                 ckpt_filename = f"{experiment_id}_step_{step}.bin"
                 ckpt_path = os.path.join(checkpoint_dir, ckpt_filename)
 
-                # Write compact checkpoint record
+                # Write full reproducible weight artifact matching weights_sha
                 with open(ckpt_path, "wb") as f:
-                    f.write(weights_bytes[:1024])  # Representative weights slice
+                    f.write(weights_bytes)
 
                 checkpoints.append({
                     "step": step,

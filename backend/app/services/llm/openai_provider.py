@@ -28,9 +28,19 @@ class OpenAIProvider(BaseLLMProvider):
         api_key: Optional[str] = None,
         base_url: str = "https://api.openai.com/v1"
     ):
-        self.api_key = api_key or settings.OPENAI_API_KEY
+        self._explicit_api_key = api_key
         self.base_url = base_url.rstrip("/")
         self.provider_name = "openai"
+
+    @property
+    def api_key(self) -> Optional[str]:
+        if self._explicit_api_key is not None:
+            return self._explicit_api_key
+        return settings.OPENAI_API_KEY
+
+    @api_key.setter
+    def api_key(self, value: Optional[str]) -> None:
+        self._explicit_api_key = value
 
     def is_configured(self) -> bool:
         return bool(self.api_key and len(self.api_key.strip()) > 5)

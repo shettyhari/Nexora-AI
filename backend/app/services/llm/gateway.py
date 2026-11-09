@@ -1,10 +1,8 @@
 import asyncio
 import logging
-from typing import AsyncGenerator, Dict, List, Optional, Union
-from app.core.config import settings
+from typing import AsyncGenerator, Dict, Optional, Tuple, Union
 from app.services.llm.base import (
     BaseLLMProvider,
-    LLMMessage,
     LLMRequest,
     LLMResponse,
     LLMStreamChunk,
@@ -22,78 +20,154 @@ logger = logging.getLogger(__name__)
 
 
 class UnifiedModelGateway:
-    """Unified LLM Gateway providing provider routing, health checks, resilience, and metrics."""
+    """
+    Unified LLM Gateway providing provider routing, health checks, resilience,
+    cost accounting, and STRICT attribution integrity (never silently mislabels fallbacks).
+    """
 
     def __init__(self):
         self._providers: Dict[str, BaseLLMProvider] = {
-            ModelProvider.GOOGLE: GeminiProvider(),
-            ModelProvider.OPENAI: OpenAIProvider(),
-            ModelProvider.ANTHROPIC: AnthropicProvider(),
-            ModelProvider.HUGGINGFACE: HuggingFaceProvider(),
-            ModelProvider.OPENAI_COMPATIBLE: OpenAICompatibleProvider(),
-            ModelProvider.NEXORA: NexoraProvider(),
+            ModelProvider.GOOGLE.value: GeminiProvider(),
+            ModelProvider.OPENAI.value: OpenAIProvider(),
+            ModelProvider.ANTHROPIC.value: AnthropicProvider(),
+            ModelProvider.HUGGINGFACE.value: HuggingFaceProvider(),
+            ModelProvider.OPENAI_COMPATIBLE.value: OpenAICompatibleProvider(),
+            ModelProvider.NEXORA.value: NexoraProvider(),
         }
-        self._fallback_provider = self._providers[ModelProvider.NEXORA]
+        self._fallback_provider = self._providers[ModelProvider.NEXORA.value]
 
     def get_provider(self, provider_type: Union[ModelProvider, str]) -> BaseLLMProvider:
-        key = str(provider_type).lower()
+        raw = provider_type.value if isinstance(provider_type, ModelProvider) else str(provider_type)
+        key = raw.lower()
         return self._providers.get(key, self._fallback_provider)
 
-    def resolve_provider_for_model(self, model_id: str) -> BaseLLMProvider:
+    def resolve_execution_target(self, model_id: str) -> Tuple[BaseLLMProvider, str, str, bool, Optional[str], Optional[str]]:
+        """
+        Resolve target execution provider and truthful identity metadata:
+        Returns: (provider_instance, target_model_id, actual_provider_name, fallback_used, fallback_from_model, fallback_reason)
+        """
         desc = model_registry.get_model(model_id)
         if desc:
             provider = self.get_provider(desc.provider)
             if provider.is_configured():
-                return provider
-            # If specified provider is not configured, fallback gracefully
-            logger.info(f"Provider '{desc.provider}' for model '{model_id}' is not configured. Using NEXORA fallback.")
-            return self._fallback_provider
+                return provider, desc.id, desc.provider.value, False, None, None
 
-        # Unknown model -> fallback
-        return self._fallback_provider
+            reason = (
+                f"Configured external provider '{desc.provider.value}' for '{desc.id}' lacks API credentials; "
+                "routed transparently to NEXORA Flagship fallback."
+            )
+            logger.info(reason)
+            return self._fallback_provider, "nexora-flagship", "nexora", True, desc.id, reason
+
+        # Unknown model alias fallback
+        reason = f"Requested model '{model_id}' not found in active catalog; routed transparently to NEXORA Flagship."
+        return self._fallback_provider, "nexora-flagship", "nexora", True, model_id, reason
+
+    def resolve_provider_for_model(self, model_id: str) -> BaseLLMProvider:
+        provider, _, _, _, _, _ = self.resolve_execution_target(model_id)
+        return provider
 
     async def stream(self, request: LLMRequest) -> AsyncGenerator[LLMStreamChunk, None]:
-        """Stream chunks from the resolved provider with fallback on failure."""
-        provider = self.resolve_provider_for_model(request.model)
+        """Stream chunks from the resolved provider with transparent fallback attribution."""
+        provider, target_model, actual_provider, pre_fallback, fallback_from, fallback_reason = (
+            self.resolve_execution_target(request.model)
+        )
 
-        # Attempt primary provider streaming
+        effective_req = request.model_copy(update={"model": target_model})
+
+        if pre_fallback:
+            yield LLMStreamChunk(
+                type="usage",
+                resolved_model=target_model,
+                actual_provider=actual_provider,
+                fallback_used=True,
+                fallback_from_model=fallback_from,
+                routing_reason=fallback_reason,
+            )
+
         has_yielded_token = False
         saw_error = False
         error_msg = ""
 
         try:
-            async for chunk in provider.stream_chat(request):
+            async for chunk in provider.stream_chat(effective_req):
                 if chunk.type == "error":
                     saw_error = True
                     error_msg = chunk.content
                     break
                 if chunk.type in ["token", "reasoning"]:
                     has_yielded_token = True
+
+                # Preserve truthful provider/model identity on every emitted chunk
+                chunk.resolved_model = chunk.resolved_model or target_model
+                chunk.actual_provider = chunk.actual_provider or actual_provider
+                if pre_fallback:
+                    chunk.fallback_used = True
+                    chunk.fallback_from_model = fallback_from
+                    chunk.resolved_model = target_model
+                    chunk.actual_provider = actual_provider
                 yield chunk
 
         except Exception as e:
             saw_error = True
             error_msg = str(e)
 
-        # If primary failed before emitting tokens, fallback gracefully
+        # Runtime provider failure before tokens were emitted -> trigger fallback without masquerading
         if saw_error and not has_yielded_token:
-            logger.warning(f"Provider failed with '{error_msg}'. Triggering NEXORA neural fallback.")
+            logger.warning(
+                f"Provider '{actual_provider}' failed for '{request.model}' ({error_msg}). Triggering NEXORA fallback."
+            )
+            fallback_notice = (
+                f"> *[Notice: Provider '{actual_provider}' for `{request.model}` unavailable "
+                f"({error_msg}). Response transparently served by `nexora-flagship`.]*\n\n"
+            )
+            fallback_req = request.model_copy(update={"model": "nexora-flagship"})
+            yield LLMStreamChunk(
+                type="usage",
+                resolved_model="nexora-flagship",
+                actual_provider="nexora",
+                fallback_used=True,
+                fallback_from_model=request.model,
+                routing_reason=f"Fallback to nexora-flagship due to provider error: {error_msg}",
+            )
             yield LLMStreamChunk(
                 type="token",
-                content=f"> *[Notice: System routed through NEXORA resilience gateway due to upstream notification: {error_msg}]*\n\n",
-                resolved_model="nexora-flagship"
+                content=fallback_notice,
+                resolved_model="nexora-flagship",
+                actual_provider="nexora",
+                fallback_used=True,
+                fallback_from_model=request.model,
             )
-            async for chunk in self._fallback_provider.stream_chat(request):
+            async for chunk in self._fallback_provider.stream_chat(fallback_req):
+                chunk.resolved_model = "nexora-flagship"
+                chunk.actual_provider = "nexora"
+                chunk.fallback_used = True
+                chunk.fallback_from_model = request.model
                 yield chunk
 
     async def generate(self, request: LLMRequest) -> LLMResponse:
-        """Non-streaming generation with fallback."""
-        provider = self.resolve_provider_for_model(request.model)
+        """Non-streaming generation with truthful provider & fallback metadata."""
+        provider, target_model, actual_provider, pre_fallback, fallback_from, _ = (
+            self.resolve_execution_target(request.model)
+        )
+        effective_req = request.model_copy(update={"model": target_model})
+
         try:
-            return await provider.generate(request)
+            resp = await provider.generate(effective_req)
+            resp.model = target_model
+            resp.actual_provider = actual_provider
+            resp.fallback_used = pre_fallback
+            resp.fallback_from_model = fallback_from
+            return resp
         except Exception as e:
-            logger.warning(f"Generate failed on primary provider: {e}. Using fallback.")
-            return await self._fallback_provider.generate(request)
+            logger.warning(f"Generate failed on provider '{actual_provider}' for '{request.model}': {e}. Using fallback.")
+            fallback_req = request.model_copy(update={"model": "nexora-flagship"})
+            resp = await self._fallback_provider.generate(fallback_req)
+            resp.model = "nexora-flagship"
+            resp.actual_provider = "nexora"
+            resp.fallback_used = True
+            resp.fallback_from_model = request.model
+            return resp
 
     async def check_all_health(self) -> Dict[str, ProviderHealth]:
         """Ping all configured providers concurrently."""
@@ -112,14 +186,11 @@ class UnifiedModelGateway:
                 results[key] = ProviderHealth(
                     provider=key,
                     status="offline",
-                    error=str(report)
+                    error=str(report),
                 )
 
         return results
 
 
-# Global singleton gateway
 gateway = UnifiedModelGateway()
 llm_gateway = gateway
-
-

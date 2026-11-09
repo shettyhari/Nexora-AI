@@ -8,6 +8,8 @@ from sqlalchemy.orm import selectinload
 from app.api.deps import get_current_user
 from app.core.config import settings
 from app.core.database import get_db
+from app.core.rate_limiter import rate_limiter
+from app.core.security_guards import record_security_event
 from app.core.security import (
     create_access_token,
     create_action_token,
@@ -44,6 +46,14 @@ async def register(
     db: AsyncSession = Depends(get_db)
 ):
     """Register a new user account with profile and preferences."""
+    ip_addr = request.client.host if request.client else "unknown"
+    allowed, _, reset_sec = await rate_limiter.check(f"auth:register:{ip_addr}", settings.RATE_LIMIT_AUTH_RPM)
+    if not allowed:
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail=f"Too many registration attempts. Retry in {reset_sec}s.",
+            headers={"Retry-After": str(reset_sec)},
+        )
     # Check if email or username already exists
     existing = await db.execute(
         select(User).where(or_(User.email == data.email.lower(), User.username == data.username.lower()))
@@ -115,6 +125,22 @@ async def login(
     db: AsyncSession = Depends(get_db)
 ):
     """Authenticate with email or username and password."""
+    ip_addr = request.client.host if request.client else "unknown"
+    allowed, _, reset_sec = await rate_limiter.check(f"auth:login:{ip_addr}", settings.RATE_LIMIT_AUTH_RPM)
+    if not allowed:
+        await record_security_event(
+            db,
+            event_type="auth_rate_limited",
+            severity="medium",
+            ip_address=ip_addr,
+            endpoint="/api/v1/auth/login",
+        )
+        await db.commit()
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail=f"Too many login attempts. Retry in {reset_sec}s.",
+            headers={"Retry-After": str(reset_sec)},
+        )
     login_id = data.login.lower().strip()
     query = (
         select(User)
@@ -227,8 +253,8 @@ async def request_password_reset(
         )
         user.reset_password_token = reset_token
         await db.commit()
-        # In production this would send an email. For local/development, we log it.
-        logger.info(f"Password reset token for {user.email}: {reset_token}")
+        # Dispatch reset link securely without logging plaintext token secret
+        logger.info("Password reset request processed for user_id=%s", user.id)
 
     return MessageResponse(
         message="If an account with this email exists, a password reset link has been dispatched."

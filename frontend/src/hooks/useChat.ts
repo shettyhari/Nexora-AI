@@ -120,13 +120,23 @@ export function useChat(initialConversationId?: string) {
           attachment_ids: attachmentIds,
         },
         (chunk: StreamEvent) => {
-          if (chunk.resolved_model || chunk.routing_reason || chunk.citations) {
+          if (
+            chunk.resolved_model ||
+            chunk.actual_provider ||
+            chunk.fallback_used !== undefined ||
+            chunk.fallback_from_model ||
+            chunk.routing_reason ||
+            chunk.citations
+          ) {
             setMessages((prev) =>
               prev.map((m) =>
                 m.id === tempAsstMsgId
                   ? {
                       ...m,
                       model: chunk.resolved_model || m.model,
+                      actual_provider: chunk.actual_provider || m.actual_provider,
+                      fallback_used: chunk.fallback_used ?? m.fallback_used,
+                      fallback_from_model: chunk.fallback_from_model || m.fallback_from_model,
                       routing_reason: chunk.routing_reason || m.routing_reason,
                       citations: chunk.citations || m.citations,
                     }
@@ -233,13 +243,23 @@ export function useChat(initialConversationId?: string) {
       await api.regenerateMessage(
         messageId,
         (chunk: StreamEvent) => {
-          if (chunk.resolved_model || chunk.routing_reason || chunk.citations) {
+          if (
+            chunk.resolved_model ||
+            chunk.actual_provider ||
+            chunk.fallback_used !== undefined ||
+            chunk.fallback_from_model ||
+            chunk.routing_reason ||
+            chunk.citations
+          ) {
             setMessages((prev) =>
               prev.map((m) =>
                 m.id === messageId
                   ? {
                       ...m,
                       model: chunk.resolved_model || m.model,
+                      actual_provider: chunk.actual_provider || m.actual_provider,
+                      fallback_used: chunk.fallback_used ?? m.fallback_used,
+                      fallback_from_model: chunk.fallback_from_model || m.fallback_from_model,
                       routing_reason: chunk.routing_reason || m.routing_reason,
                       citations: chunk.citations || m.citations,
                     }

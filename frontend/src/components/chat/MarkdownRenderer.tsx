@@ -13,6 +13,18 @@ interface MarkdownRendererProps {
   isStreaming?: boolean;
 }
 
+function isSafeHref(href?: string): boolean {
+  if (!href) return false;
+  const trimmed = href.trim();
+  if (trimmed.startsWith("/") || trimmed.startsWith("#")) return true;
+  try {
+    const parsed = new URL(trimmed, "https://nexora.local");
+    return parsed.protocol === "http:" || parsed.protocol === "https:" || parsed.protocol === "mailto:";
+  } catch {
+    return false;
+  }
+}
+
 export const MarkdownRenderer: React.FC<MarkdownRendererProps> = ({ content, isStreaming }) => {
   return (
     <div className="prose dark:prose-invert prose-slate max-w-none text-sm md:text-base leading-relaxed break-words">
@@ -69,6 +81,16 @@ export const MarkdownRenderer: React.FC<MarkdownRendererProps> = ({ content, isS
             );
           },
           a({ href, children }) {
+            if (!isSafeHref(href)) {
+              return (
+                <span
+                  title="Blocked unsafe URI scheme"
+                  className="text-slate-400 underline decoration-dotted cursor-not-allowed"
+                >
+                  {children}
+                </span>
+              );
+            }
             return (
               <a
                 href={href}

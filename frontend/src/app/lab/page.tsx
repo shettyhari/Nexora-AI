@@ -1,6 +1,10 @@
 "use client";
 
 import React, { useState, useEffect, useCallback } from "react";
+import Link from "next/link";
+import { useRouter } from "next/navigation";
+import { ShieldAlert } from "lucide-react";
+import { useAuth } from "@/hooks/useAuth";
 import { LabHeader, LabTab } from "@/components/lab/LabHeader";
 import { ModelRegistryTab } from "@/components/lab/ModelRegistryTab";
 import { DatasetLibraryTab } from "@/components/lab/DatasetLibraryTab";
@@ -31,6 +35,10 @@ import {
 import { api } from "@/lib/api";
 
 export default function ModelLabPage() {
+  const router = useRouter();
+  const { user, loading: authLoading } = useAuth();
+  const hasLabAccess = Boolean(user && (user.role === "admin" || user.role === "researcher"));
+
   const [activeTab, setActiveTab] = useState<LabTab>("models");
   const [dashboard, setDashboard] = useState<LabDashboardData | null>(null);
   const [models, setModels] = useState<LabModel[]>([]);
@@ -95,8 +103,42 @@ export default function ModelLabPage() {
   }, []);
 
   useEffect(() => {
-    fetchAllData();
-  }, [fetchAllData]);
+    if (!authLoading && !user) {
+      router.push("/login");
+    } else if (hasLabAccess) {
+      fetchAllData();
+    } else if (user) {
+      setLoading(false);
+    }
+  }, [authLoading, user, hasLabAccess, router, fetchAllData]);
+
+  if (authLoading || !user) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-background">
+        <div className="w-8 h-8 border-2 border-cyan-500 border-t-transparent rounded-full animate-spin" />
+      </div>
+    );
+  }
+
+  if (!hasLabAccess) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-background p-6">
+        <div className="max-w-md w-full p-8 rounded-3xl border border-rose-500/30 bg-card text-center space-y-4 shadow-xl">
+          <ShieldAlert className="w-12 h-12 text-rose-500 mx-auto" />
+          <h1 className="text-lg font-bold">403 — Model Lab Privileges Required</h1>
+          <p className="text-xs text-muted-foreground">
+            Your account role is <code className="font-mono font-bold">{user.role}</code>. Only <code className="font-mono">admin</code> or <code className="font-mono">researcher</code> accounts may access NEXORA Model Lab.
+          </p>
+          <Link
+            href="/"
+            className="inline-block px-5 py-2 rounded-xl bg-cyan-600 text-white text-xs font-bold"
+          >
+            Return to Chat
+          </Link>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-background text-foreground flex flex-col">
