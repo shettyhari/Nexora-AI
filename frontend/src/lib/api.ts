@@ -624,6 +624,134 @@ class ApiClient {
       body: JSON.stringify(data),
     });
   }
+
+  // --- Prompt 5: Training Jobs, Telemetry, Optimization, Checkpoints & Serving ---
+  async getLabTelemetry(): Promise<any> {
+    return this.request<any>("/lab/telemetry");
+  }
+
+  async getLabFrameworks(): Promise<any> {
+    return this.request<any>("/lab/frameworks");
+  }
+
+  async verifyLabLicense(data: {
+    base_model_license: string;
+    dataset_license: string;
+    intended_use: string;
+    training_method: string;
+  }): Promise<any> {
+    return this.request<any>("/lab/licenses/verify", {
+      method: "POST",
+      body: JSON.stringify(data),
+    });
+  }
+
+  async getLabTrainingJobs(): Promise<any[]> {
+    return this.request<any[]>("/lab/jobs");
+  }
+
+  async createLabTrainingJob(data: any): Promise<any> {
+    return this.request<any>("/lab/jobs", {
+      method: "POST",
+      body: JSON.stringify(data),
+    });
+  }
+
+  async startLabTrainingJob(jobId: string): Promise<any> {
+    return this.request<any>(`/lab/jobs/${jobId}/start`, { method: "POST" });
+  }
+
+  async pauseLabTrainingJob(jobId: string): Promise<any> {
+    return this.request<any>(`/lab/jobs/${jobId}/pause`, { method: "POST" });
+  }
+
+  async resumeLabTrainingJob(jobId: string): Promise<any> {
+    return this.request<any>(`/lab/jobs/${jobId}/resume`, { method: "POST" });
+  }
+
+  async recoverLabTrainingJob(jobId: string): Promise<any> {
+    return this.request<any>(`/lab/jobs/${jobId}/recover`, { method: "POST" });
+  }
+
+  async cancelLabTrainingJob(jobId: string): Promise<any> {
+    return this.request<any>(`/lab/jobs/${jobId}/cancel`, { method: "POST" });
+  }
+
+  async getLabTrainingJobLogs(jobId: string, tail = 200): Promise<{ job_id: string; status: string; logs: string }> {
+    return this.request<any>(`/lab/jobs/${jobId}/logs?tail=${tail}`);
+  }
+
+  async validateLabCheckpoint(checkpointId: string): Promise<any> {
+    return this.request<any>(`/lab/checkpoints/${checkpointId}/validate`, { method: "POST" });
+  }
+
+  async exportLabCheckpoint(checkpointId: string, format = "safetensors"): Promise<any> {
+    return this.request<any>(`/lab/checkpoints/${checkpointId}/export?target_format=${format}`, { method: "POST" });
+  }
+
+  async rollbackLabCheckpoint(checkpointId: string, target_model_id?: string, reason?: string): Promise<any> {
+    return this.request<any>(`/lab/checkpoints/${checkpointId}/rollback`, {
+      method: "POST",
+      body: JSON.stringify({ target_model_id, reason }),
+    });
+  }
+
+  async getLabBenchmarks(): Promise<any[]> {
+    return this.request<any[]>("/lab/benchmarks");
+  }
+
+  async runLabComparativeBenchmark(data: any): Promise<any> {
+    return this.request<any>("/lab/benchmarks/compare", {
+      method: "POST",
+      body: JSON.stringify(data),
+    });
+  }
+
+  async submitLabHumanRating(suiteId: string, data: any): Promise<any> {
+    return this.request<any>(`/lab/benchmarks/${suiteId}/human-rating`, {
+      method: "POST",
+      body: JSON.stringify(data),
+    });
+  }
+
+  async getLabOptimizations(): Promise<any[]> {
+    return this.request<any[]>("/lab/optimizations");
+  }
+
+  async runLabOptimization(data: any): Promise<any> {
+    return this.request<any>("/lab/optimizations/run", {
+      method: "POST",
+      body: JSON.stringify(data),
+    });
+  }
+
+  async getLabDeployments(): Promise<{ engines: any; deployments: any[] }> {
+    return this.request<any>("/lab/deployments");
+  }
+
+  async deployLabCheckpoint(data: any): Promise<any> {
+    return this.request<any>("/lab/deployments", {
+      method: "POST",
+      body: JSON.stringify(data),
+    });
+  }
+
+  async stopLabDeployment(deploymentId: string): Promise<any> {
+    return this.request<any>(`/lab/deployments/${deploymentId}/stop`, { method: "POST" });
+  }
+
+  async invokeOpenAIChatCompletion(model: string, prompt: string): Promise<any> {
+    return this.request<any>("/inference/v1/chat/completions", {
+      method: "POST",
+      body: JSON.stringify({
+        model,
+        messages: [{ role: "user", content: prompt }],
+        max_tokens: 48,
+        temperature: 0.7,
+        stream: false,
+      }),
+    });
+  }
 }
 
 export const api = new ApiClient();

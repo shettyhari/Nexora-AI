@@ -94,12 +94,41 @@ Extensible mathematical implementation of state-of-the-art autoregressive Transf
 | `GET` | `/api/v1/lab/experiments/{id}` | Inspect loss curves and reproducibility manifest |
 | `POST` | `/api/v1/lab/experiments/{id}/reproduce` | Launch reproducible twin run with locked seeds |
 | `GET` | `/api/v1/lab/checkpoints` | List saved checkpoints across experiments |
+| `POST` | `/api/v1/lab/checkpoints/{id}/validate` | Verify SHA-256 checksum, reload SafeTensors/PEFT weights, scan NaN/Inf, and test forward pass |
+| `POST` | `/api/v1/lab/checkpoints/{id}/export` | Export validated checkpoint bundle (`EXPORT_MANIFEST.json`) |
+| `POST` | `/api/v1/lab/checkpoints/{id}/rollback` | Switch active rollback pointer to a validated checkpoint |
 | `GET` | `/api/v1/lab/evaluations` | List benchmark evaluation records |
 | `POST` | `/api/v1/lab/evaluations/run` | Execute benchmark evaluation against a checkpoint |
+| `GET` | `/api/v1/lab/telemetry` | Real-time NVML/CUDA/CPU/RAM hardware telemetry + active worker progress |
+| `GET` | `/api/v1/lab/frameworks` | Detect installed PyTorch, Transformers, Accelerate, PEFT, TRL, DeepSpeed, NeMo versions |
+| `POST` | `/api/v1/lab/licenses/verify` | Enforce base model + dataset + intended use license compatibility |
+| `GET` | `/api/v1/lab/jobs` | List & synchronize isolated fine-tuning jobs |
+| `POST` | `/api/v1/lab/jobs` | Create & optionally spawn isolated PyTorch/PEFT/TRL training worker |
+| `POST` | `/api/v1/lab/jobs/{id}/start` | Spawn isolated worker subprocess (`worker.py`) |
+| `POST` | `/api/v1/lab/jobs/{id}/pause` | Signal worker pause & save resumable checkpoint |
+| `POST` | `/api/v1/lab/jobs/{id}/resume` | Resume worker from last checkpoint & `optimizer.pt` |
+| `POST` | `/api/v1/lab/jobs/{id}/recover` | Failure recovery restart from latest verified checkpoint |
+| `POST` | `/api/v1/lab/jobs/{id}/cancel` | Cancel queued or running job cleanly |
+| `GET` | `/api/v1/lab/jobs/{id}/logs` | Tail live stdout/stderr logs from isolated worker |
+| `GET` | `/api/v1/lab/benchmarks` | List 10-dimension comparative benchmark suites |
+| `POST` | `/api/v1/lab/benchmarks/compare` | Run 10-axis base vs fine-tuned evaluation + data leakage guard + regression check |
+| `POST` | `/api/v1/lab/benchmarks/{id}/human-rating` | Append human evaluator ratings to benchmark suite |
+| `GET` | `/api/v1/lab/optimizations` | List quantization & inference speed benchmarks |
+| `POST` | `/api/v1/lab/optimizations/run` | Execute INT8/FP16/BF16 quantization & TTFT/memory/context/batch scaling sweeps |
+| `GET` | `/api/v1/lab/deployments` | List deployed OpenAI-compatible serving endpoints & engine capabilities |
+| `POST` | `/api/v1/lab/deployments` | Deploy a validated checkpoint to independent OpenAI inference server |
+| `POST` | `/api/v1/lab/deployments/{id}/stop` | Unload & stop deployed inference endpoint |
 
 ---
 
 ## 🧪 3. Verification & Testing
+
+Run the automated Model Lab and Training Infrastructure test suites:
+```bash
+cd backend
+pytest tests/test_lab.py tests/test_training_infra.py -v
+```
+See [`TRAINING_INFRASTRUCTURE.md`](TRAINING_INFRASTRUCTURE.md) for deep coverage of isolated workers, quantization, checkpoint gates, and OpenAI serving endpoints.
 
 Run the automated Model Lab test suite:
 ```bash
@@ -120,3 +149,4 @@ All 15 test suites verify:
 - Fertility, compression ratio, and multilingual evaluation.
 - Hardware profiling and reproducibility manifest hashing.
 - Authentic training step execution and checkpoint SHA-256 hashing.
+

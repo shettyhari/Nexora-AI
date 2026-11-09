@@ -1,0 +1,25 @@
+# ==============================================================================
+# NEXORA MODEL LAB - Prompt 5: Training, Fine-Tuning, Optimization & GPU Serving
+# Tested & Compatible Stack for Dedicated Worker / GPU Nodes
+# Install: uv pip install -r requirements-training.txt
+# ==============================================================================
+
+# Core Deep Learning & Distributed Execution
+torch>=2.4.0,<2.7.0
+transformers>=4.45.0,<4.52.0
+accelerate>=1.0.0,<1.6.0
+peft>=0.13.0,<0.16.0
+trl>=0.11.0,<0.17.0
+datasets>=3.0.0
+safetensors>=0.4.5
+
+# Hardware Telemetry & GPU Monitoring
+psutil>=6.0.0
+nvidia-ml-py>=12.560.0
+
+# Linux / CUDA High-Scale Distributed Training, 4-bit QLoRA & vLLM Serving
+bitsandbytes>=0.44.0; platform_system == "Linux"
+deepspeed>=0.15.0; platform_system == "Linux"
+vllm>=0.6.3; platform_system == "Linux"
+# nemo_toolkit[all]>=2.0.0; platform_system == "Linux"
+

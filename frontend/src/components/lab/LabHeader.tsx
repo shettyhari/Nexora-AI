@@ -12,7 +12,12 @@ import {
   Award,
   ArrowLeft,
   Activity,
-  Layers
+  Layers,
+  Gauge,
+  GitCompare,
+  Server,
+  Rocket,
+  BarChart3
 } from "lucide-react";
 
 export type LabTab =
@@ -20,10 +25,15 @@ export type LabTab =
   | "datasets"
   | "tokenizers"
   | "architecture"
+  | "finetuning"
+  | "telemetry"
   | "experiments"
-  | "checkpoints"
   | "training"
-  | "evaluations";
+  | "checkpoints"
+  | "evaluations"
+  | "comparison"
+  | "optimization"
+  | "deployments";
 
 interface LabHeaderProps {
   activeTab: LabTab;
@@ -34,6 +44,8 @@ interface LabHeaderProps {
     datasets: number;
     experiments: number;
     checkpoints: number;
+    jobs?: number;
+    deployments?: number;
   };
 }
 
@@ -46,12 +58,17 @@ export const LabHeader: React.FC<LabHeaderProps> = ({
   const tabs = [
     { id: "models", label: "Model Registry", icon: Layers, count: counts?.models },
     { id: "datasets", label: "Dataset Library", icon: Database, count: counts?.datasets },
+    { id: "finetuning", label: "Fine-Tuning Jobs", icon: Rocket, count: counts?.jobs },
+    { id: "telemetry", label: "GPU & Telemetry", icon: BarChart3 },
+    { id: "checkpoints", label: "Checkpoints", icon: HardDrive, count: counts?.checkpoints },
+    { id: "comparison", label: "Benchmark Compare", icon: GitCompare },
+    { id: "optimization", label: "Quantization Bench", icon: Gauge },
+    { id: "deployments", label: "Inference Server", icon: Server, count: counts?.deployments },
     { id: "tokenizers", label: "Tokenizer Lab", icon: Sliders },
     { id: "architecture", label: "Architecture", icon: Cpu },
     { id: "experiments", label: "Experiments", icon: History, count: counts?.experiments },
-    { id: "training", label: "Training Config", icon: Activity },
-    { id: "checkpoints", label: "Checkpoints", icon: HardDrive, count: counts?.checkpoints },
-    { id: "evaluations", label: "Evaluations", icon: Award },
+    { id: "training", label: "Pretrain Config", icon: Activity },
+    { id: "evaluations", label: "Legacy Evals", icon: Award },
   ];
 
   return (
@@ -74,11 +91,11 @@ export const LabHeader: React.FC<LabHeaderProps> = ({
               <div className="flex items-center gap-2">
                 <h1 className="font-bold text-lg text-foreground tracking-tight">NEXORA MODEL LAB</h1>
                 <span className="text-[10px] font-semibold uppercase px-2 py-0.5 rounded-full bg-cyan-500/10 text-cyan-400 border border-cyan-500/20">
-                  Foundation Research
+                  Training &amp; GPU Infrastructure
                 </span>
               </div>
               <p className="text-xs text-muted-foreground">
-                Proprietary Decoder-Only Transformer Research, Dataset Engine & Experimentation
+                Foundation Model Research, Isolated Fine-Tuning Workers, Quantization &amp; OpenAI Serving
               </p>
             </div>
           </div>
@@ -88,7 +105,7 @@ export const LabHeader: React.FC<LabHeaderProps> = ({
             <div className="flex items-center gap-2 text-xs text-muted-foreground">
               <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-muted/60 border border-border">
                 <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-                <span>Python {environment.python_version || "3.12"}</span>
+                <span>Python {environment.python_version || "3.11"}</span>
               </span>
               <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-muted/60 border border-border">
                 <span>{environment.cpu_cores || 8} CPU Cores</span>

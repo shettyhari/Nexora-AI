@@ -237,3 +237,4 @@ export const TrainingConfigTab: React.FC<TrainingConfigTabProps> = ({
     </div>
   );
 };
+

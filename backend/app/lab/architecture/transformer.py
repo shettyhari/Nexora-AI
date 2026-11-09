@@ -245,3 +245,4 @@ class DecoderTransformer:
         # Prevent overflow in perplexity
         perplexity = float(np.exp(min(loss, 20.0)))
         return round(loss, 4), round(perplexity, 4)
+

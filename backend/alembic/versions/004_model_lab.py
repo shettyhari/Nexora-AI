@@ -158,3 +158,4 @@ def downgrade() -> None:
     op.drop_table("lab_tokenizers")
     op.drop_table("lab_datasets")
     op.drop_table("lab_models")
+

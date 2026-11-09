@@ -21,6 +21,10 @@ from app.models.lab import (
     LabExperiment,
     LabCheckpoint,
     LabEvaluation,
+    LabTrainingJob,
+    LabBenchmarkSuite,
+    LabOptimizationRun,
+    LabInferenceDeployment,
 )
 
 __all__ = [
@@ -49,4 +53,8 @@ __all__ = [
     "LabExperiment",
     "LabCheckpoint",
     "LabEvaluation",
+    "LabTrainingJob",
+    "LabBenchmarkSuite",
+    "LabOptimizationRun",
+    "LabInferenceDeployment",
 ]

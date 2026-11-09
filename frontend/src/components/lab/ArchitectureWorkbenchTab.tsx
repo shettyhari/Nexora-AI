@@ -430,3 +430,4 @@ export const ArchitectureWorkbenchTab: React.FC = () => {
     </div>
   );
 };
+

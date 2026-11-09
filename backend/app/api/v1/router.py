@@ -18,6 +18,8 @@ from app.api.v1.research import router as research_router
 from app.api.v1.agents import router as agents_router
 from app.api.v1.tools import router as tools_router
 from app.api.v1.lab import router as lab_router
+from app.api.v1.lab_training import router as lab_training_router
+from app.api.v1.inference import lab_deployments_router, openai_router
 
 api_router = APIRouter()
 
@@ -40,3 +42,6 @@ api_router.include_router(research_router)
 api_router.include_router(agents_router)
 api_router.include_router(tools_router)
 api_router.include_router(lab_router)
+api_router.include_router(lab_training_router)
+api_router.include_router(lab_deployments_router)
+api_router.include_router(openai_router, prefix="/inference")

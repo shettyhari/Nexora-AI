@@ -495,7 +495,37 @@ Executes dual dense vector + sparse BM25Okapi search and reciprocal rank fusion 
 
 ---
 
-## 17. Error Handling & Status Codes
+## 17. Model Training, Fine-Tuning & OpenAI Serving Endpoints (Prompt 5)
+
+### 17.1 Hardware Telemetry & Training Frameworks
+- `GET /api/v1/lab/telemetry`: Authentic NVML/nvidia-smi/PyTorch/psutil CPU, RAM, Disk & GPU metrics (`GPU Unavailable` when no GPU exists).
+- `GET /api/v1/lab/frameworks`: Detects installed PyTorch, Transformers, Accelerate, PEFT, TRL, SafeTensors, DeepSpeed & NeMo adapters.
+- `POST /api/v1/lab/licenses/verify`: Verifies `(base_model_license, dataset_license, intended_use)` compatibility prior to fine-tuning.
+- `GET /api/v1/lab/distributed-configs/preview`: Generates Accelerate, PEFT QLoRA, DeepSpeed ZeRO-1/2/3 & NVIDIA NeMo recipes.
+
+### 17.2 Isolated Training Jobs Orchestration
+- `GET /api/v1/lab/jobs` / `POST /api/v1/lab/jobs`: Create & synchronize isolated worker jobs (`sft`, `instruction`, `lora`, `qlora`, `dpo`, `grpo`).
+- `POST /api/v1/lab/jobs/{id}/start|pause|resume|recover|cancel`: Process-level worker lifecycle orchestration.
+- `GET /api/v1/lab/jobs/{id}/logs`: Tail stdout/stderr worker logs.
+
+### 17.3 Checkpoint Validation, Export & Rollback
+- `POST /api/v1/lab/checkpoints/{id}/validate`: SHA-256 verification, weight reload, zero NaN/Inf check, forward-pass verification.
+- `POST /api/v1/lab/checkpoints/{id}/export`: Portable SafeTensors/HF release bundle + `EXPORT_MANIFEST.json`.
+- `POST /api/v1/lab/checkpoints/{id}/rollback`: Switch active validated rollback pointer.
+
+### 17.4 Comparative Benchmarks & Quantization
+- `POST /api/v1/lab/benchmarks/compare`: 10-dimension evaluation (`general_knowledge`, `reasoning`, `mathematics`, `coding`, `instruction_following`, `multilingual`, `long_context`, `factuality`, `safety`, `tool_calling`) + 5-gram/SHA-256 data leakage blocker + regression gate.
+- `POST /api/v1/lab/benchmarks/{id}/human-rating`: Record human evaluator judgments.
+- `POST /api/v1/lab/optimizations/run`: Real `fp32`/`fp16`/`bf16`/`int8_dynamic`/`int4_nf4` compression, TTFT ms, decode tok/s, peak memory, context & batch sweeps.
+
+### 17.5 Independent OpenAI-Compatible Serving Endpoints (`/v1/*`)
+- `POST /api/v1/lab/deployments` / `POST /api/v1/lab/deployments/{id}/stop`: Deploy validated checkpoints (`transformers`, `vllm` CUDA, `pytorch_native`).
+- `GET /v1/models` & `GET /v1/health`: Active serving endpoints and accelerator health.
+- `POST /v1/chat/completions` (`stream=false` JSON or `stream=true` SSE `[DONE]`) & `POST /v1/completions`.
+
+---
+
+## 18. Error Handling & Status Codes
 
 All errors return RFC 7807 compliant JSON:
 ```json

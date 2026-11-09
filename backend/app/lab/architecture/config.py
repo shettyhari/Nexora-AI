@@ -45,3 +45,4 @@ class TransformerConfig(BaseModel):
     @property
     def head_dim(self) -> int:
         return self.d_model // self.n_heads
+

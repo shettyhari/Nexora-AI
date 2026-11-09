@@ -155,9 +155,12 @@ export interface LabExperiment {
 
 export interface LabCheckpoint {
   id: string;
-  experiment_id: string;
+  experiment_id?: string;
+  training_job_id?: string;
   step: number;
   epoch: number;
+  version: string;
+  format: string;
   train_loss: number;
   val_loss: number;
   perplexity: number;
@@ -165,6 +168,190 @@ export interface LabCheckpoint {
   storage_path: string;
   weights_sha256: string;
   is_best: boolean;
+  is_adapter_only: boolean;
+  adapter_config: Record<string, any>;
+  validated: boolean;
+  validation_report: Record<string, any>;
+  export_path?: string;
+  parent_checkpoint_id?: string;
+  is_active_rollback_target: boolean;
+  created_at: string;
+}
+
+export interface HardwareTelemetry {
+  timestamp: number;
+  platform: string;
+  accelerator: "cuda" | "mps" | "cpu";
+  gpu_available: boolean;
+  gpu_count: number;
+  gpu_status: string;
+  cuda_version?: string;
+  torch_version?: string;
+  gpus: Array<{
+    index: number;
+    name: string;
+    backend: string;
+    driver_version?: string;
+    gpu_utilization_pct?: number | null;
+    memory_utilization_pct?: number | null;
+    memory_used_mb?: number | null;
+    memory_free_mb?: number | null;
+    memory_total_mb?: number | null;
+    temperature_c?: number | null;
+    power_draw_w?: number | null;
+  }>;
+  cpu: {
+    utilization_pct: number;
+    cores_logical: number;
+    cores_physical: number;
+    frequency_mhz?: number | null;
+  };
+  memory: {
+    ram_total_gb: number;
+    ram_used_gb: number;
+    ram_available_gb: number;
+    ram_utilization_pct: number;
+  };
+  disk: {
+    total_gb: number;
+    free_gb: number;
+  };
+}
+
+export interface LicenseVerificationResult {
+  approved: boolean;
+  intended_use: string;
+  training_method: string;
+  base_model_license: string;
+  dataset_license: string;
+  errors: string[];
+  warnings: string[];
+  obligations: string[];
+}
+
+export interface LabTrainingJob {
+  id: string;
+  name: string;
+  experiment_id?: string;
+  base_model_id: string;
+  base_model_name: string;
+  base_model_license: string;
+  dataset_id?: string;
+  dataset_name: string;
+  dataset_license: string;
+  intended_use: string;
+  training_method: "sft" | "instruction" | "lora" | "qlora" | "dpo" | "grpo" | "pretrain";
+  framework: "trl" | "transformers" | "peft" | "accelerate" | "deepspeed" | "nemo" | "pytorch";
+  framework_config: Record<string, any>;
+  lora_config: Record<string, any>;
+  hyperparameters: Record<string, any>;
+  license_verified: boolean;
+  license_report: LicenseVerificationResult;
+  status: "queued" | "scheduled" | "running" | "paused" | "completed" | "failed" | "cancelled";
+  priority: number;
+  worker_pid?: number;
+  device_type: string;
+  gpu_required: boolean;
+  current_step: number;
+  total_steps: number;
+  tokens_processed: number;
+  tokens_per_sec: number;
+  current_train_loss?: number;
+  current_val_loss?: number;
+  current_lr?: number;
+  loss_history: Array<{
+    step: number;
+    train_loss: number;
+    val_loss: number;
+    perplexity: number;
+    lr: number;
+    grad_norm?: number;
+    tokens_per_sec?: number;
+  }>;
+  hardware_snapshot: Record<string, any>;
+  checkpoint_dir: string;
+  log_file_path: string;
+  output_checkpoint_id?: string;
+  checkpoint_validated: boolean;
+  error_message?: string;
+  recovery_attempts: number;
+  started_at?: string;
+  completed_at?: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface LabBenchmarkSuite {
+  id: string;
+  name: string;
+  version: string;
+  candidate_model_name: string;
+  candidate_checkpoint_id?: string;
+  baseline_model_name: string;
+  baseline_checkpoint_id?: string;
+  dataset_id?: string;
+  leakage_checked: boolean;
+  leakage_overlap_count: number;
+  leakage_blocked: boolean;
+  leakage_report: Record<string, any>;
+  dimension_scores: Record<string, { score: number; perplexity: number; avg_latency_ms: number; measured_via_forward_pass: boolean }>;
+  baseline_scores: Record<string, { score: number; perplexity: number; avg_latency_ms: number; measured_via_forward_pass: boolean }>;
+  deltas: Record<string, number>;
+  regression_passed: boolean;
+  regression_failures: string[];
+  human_ratings: Array<{
+    evaluator: string;
+    prompt: string;
+    preference: string;
+    coherence: number;
+    helpfulness: number;
+    safety_pass: boolean;
+    notes?: string;
+    timestamp: number;
+  }>;
+  aggregate_candidate_score: number;
+  aggregate_baseline_score: number;
+  created_at: string;
+}
+
+export interface LabOptimizationRun {
+  id: string;
+  checkpoint_id?: string;
+  model_name: string;
+  target_precision: string;
+  batch_size: number;
+  context_length: number;
+  kv_cache_enabled: boolean;
+  original_size_mb: number;
+  optimized_size_mb: number;
+  compression_ratio: number;
+  ttft_ms: number;
+  tokens_per_sec: number;
+  peak_memory_mb: number;
+  context_scaling_results: Array<{ seq_len: number; prefill_latency_ms: number; prefill_tok_per_sec: number }>;
+  batch_scaling_results: Array<{ batch_size: number; latency_ms: number; throughput_tok_per_sec: number }>;
+  artifact_path: string;
+  status: string;
+  created_at: string;
+}
+
+export interface LabInferenceDeployment {
+  id: string;
+  model_alias: string;
+  checkpoint_id?: string;
+  model_name: string;
+  engine: string;
+  quantization: string;
+  device: string;
+  max_model_len: number;
+  max_concurrent_requests: number;
+  gpu_memory_utilization: number;
+  status: string;
+  requests_served: number;
+  active_queue_depth: number;
+  total_prompt_tokens: number;
+  total_completion_tokens: number;
+  avg_latency_ms: number;
   created_at: string;
 }
 
@@ -201,3 +388,4 @@ export interface LabDashboardData {
   };
   environment: Record<string, any>;
 }
+

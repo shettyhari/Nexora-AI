@@ -347,3 +347,4 @@ export const ModelRegistryTab: React.FC<ModelRegistryTabProps> = ({ models, onRe
     </div>
   );
 };
+

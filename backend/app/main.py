@@ -7,6 +7,7 @@ from fastapi.responses import JSONResponse
 from sqlalchemy import select
 
 from app.api.v1.models import DEFAULT_MODELS
+from app.api.v1.inference import openai_router
 from app.api.v1.router import api_router
 from app.core.config import settings
 from app.core.database import AsyncSessionLocal, Base, cache, engine
@@ -100,8 +101,9 @@ async def health_check():
     }
 
 
-# Include API v1 router
+# Include API v1 router & root OpenAI-compatible inference router
 app.include_router(api_router, prefix=settings.API_V1_PREFIX)
+app.include_router(openai_router)
 
 
 @app.exception_handler(Exception)

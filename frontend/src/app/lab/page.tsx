@@ -10,6 +10,11 @@ import { ExperimentHistoryTab } from "@/components/lab/ExperimentHistoryTab";
 import { TrainingConfigTab } from "@/components/lab/TrainingConfigTab";
 import { CheckpointBrowserTab } from "@/components/lab/CheckpointBrowserTab";
 import { EvaluationHistoryTab } from "@/components/lab/EvaluationHistoryTab";
+import { FineTuningJobsTab } from "@/components/lab/FineTuningJobsTab";
+import { TelemetryMonitorTab } from "@/components/lab/TelemetryMonitorTab";
+import { BenchmarkCompareTab } from "@/components/lab/BenchmarkCompareTab";
+import { OptimizationTab } from "@/components/lab/OptimizationTab";
+import { InferenceDeployTab } from "@/components/lab/InferenceDeployTab";
 import {
   LabDashboardData,
   LabModel,
@@ -17,7 +22,11 @@ import {
   LabTokenizer,
   LabExperiment,
   LabCheckpoint,
-  LabEvaluation
+  LabEvaluation,
+  LabTrainingJob,
+  LabBenchmarkSuite,
+  LabOptimizationRun,
+  LabInferenceDeployment
 } from "@/types/lab";
 import { api } from "@/lib/api";
 
@@ -30,11 +39,30 @@ export default function ModelLabPage() {
   const [experiments, setExperiments] = useState<LabExperiment[]>([]);
   const [checkpoints, setCheckpoints] = useState<LabCheckpoint[]>([]);
   const [evaluations, setEvaluations] = useState<LabEvaluation[]>([]);
+  const [jobs, setJobs] = useState<LabTrainingJob[]>([]);
+  const [benchmarks, setBenchmarks] = useState<LabBenchmarkSuite[]>([]);
+  const [optimizations, setOptimizations] = useState<LabOptimizationRun[]>([]);
+  const [deploymentsData, setDeploymentsData] = useState<{
+    engines: any;
+    deployments: LabInferenceDeployment[];
+  } | null>(null);
   const [loading, setLoading] = useState(true);
 
   const fetchAllData = useCallback(async () => {
     try {
-      const [dashRes, mRes, dRes, tRes, eRes, cRes, evRes] = await Promise.allSettled([
+      const [
+        dashRes,
+        mRes,
+        dRes,
+        tRes,
+        eRes,
+        cRes,
+        evRes,
+        jRes,
+        bmRes,
+        optRes,
+        depRes,
+      ] = await Promise.allSettled([
         api.getLabDashboard(),
         api.getLabModels(),
         api.getLabDatasets(),
@@ -42,6 +70,10 @@ export default function ModelLabPage() {
         api.getLabExperiments(),
         api.getLabCheckpoints(),
         api.getLabEvaluations(),
+        api.getLabTrainingJobs(),
+        api.getLabBenchmarks(),
+        api.getLabOptimizations(),
+        api.getLabDeployments(),
       ]);
 
       if (dashRes.status === "fulfilled") setDashboard(dashRes.value);
@@ -51,6 +83,10 @@ export default function ModelLabPage() {
       if (eRes.status === "fulfilled") setExperiments(eRes.value);
       if (cRes.status === "fulfilled") setCheckpoints(cRes.value);
       if (evRes.status === "fulfilled") setEvaluations(evRes.value);
+      if (jRes.status === "fulfilled") setJobs(jRes.value);
+      if (bmRes.status === "fulfilled") setBenchmarks(bmRes.value);
+      if (optRes.status === "fulfilled") setOptimizations(optRes.value);
+      if (depRes.status === "fulfilled") setDeploymentsData(depRes.value);
     } catch (err) {
       console.error("Failed to load Model Lab data:", err);
     } finally {
@@ -72,7 +108,9 @@ export default function ModelLabPage() {
           models: models.length,
           datasets: datasets.length,
           experiments: experiments.length,
-          checkpoints: checkpoints.length
+          checkpoints: checkpoints.length,
+          jobs: jobs.length,
+          deployments: deploymentsData?.deployments?.filter((d) => d.status === "healthy").length || 0,
         }}
       />
 
@@ -88,6 +126,15 @@ export default function ModelLabPage() {
             {activeTab === "datasets" && <DatasetLibraryTab datasets={datasets} onRefresh={fetchAllData} />}
             {activeTab === "tokenizers" && <TokenizerLabTab tokenizers={tokenizers} onRefresh={fetchAllData} />}
             {activeTab === "architecture" && <ArchitectureWorkbenchTab />}
+            {activeTab === "finetuning" && (
+              <FineTuningJobsTab
+                models={models}
+                datasets={datasets}
+                jobs={jobs}
+                onRefresh={fetchAllData}
+              />
+            )}
+            {activeTab === "telemetry" && <TelemetryMonitorTab />}
             {activeTab === "experiments" && (
               <ExperimentHistoryTab experiments={experiments} onRefresh={fetchAllData} />
             )}
@@ -101,7 +148,32 @@ export default function ModelLabPage() {
                 }}
               />
             )}
-            {activeTab === "checkpoints" && <CheckpointBrowserTab checkpoints={checkpoints} />}
+            {activeTab === "checkpoints" && (
+              <CheckpointBrowserTab checkpoints={checkpoints} onRefresh={fetchAllData} />
+            )}
+            {activeTab === "comparison" && (
+              <BenchmarkCompareTab
+                suites={benchmarks}
+                checkpoints={checkpoints}
+                datasets={datasets}
+                onRefresh={fetchAllData}
+              />
+            )}
+            {activeTab === "optimization" && (
+              <OptimizationTab
+                runs={optimizations}
+                checkpoints={checkpoints}
+                models={models}
+                onRefresh={fetchAllData}
+              />
+            )}
+            {activeTab === "deployments" && (
+              <InferenceDeployTab
+                deploymentsData={deploymentsData}
+                checkpoints={checkpoints}
+                onRefresh={fetchAllData}
+              />
+            )}
             {activeTab === "evaluations" && (
               <EvaluationHistoryTab
                 evaluations={evaluations}

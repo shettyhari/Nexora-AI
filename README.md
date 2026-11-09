@@ -101,6 +101,15 @@ NEXORA AI is a production-grade, full-stack ChatGPT-style neural application bui
   - Immutable reproducibility lock manifests enabling one-click twin run reproduction.
 - **Model Lab UI**: Comprehensive admin workbench with Model Registry, Dataset Library, Tokenizer Lab, Architecture Workbench, Experiment Tracker, Checkpoint Browser, and Evaluation History.
 
+### 11. Model Training, Fine-Tuning & GPU Infrastructure (Prompt 5)
+- **Authentic Deep Learning Stack**: Integrated `PyTorch`, `Hugging Face Transformers`, `Accelerate`, `PEFT`, `TRL`, plus `DeepSpeed ZeRO-1/2/3` and `NVIDIA NeMo` config generators (`backend/requirements-training.txt`), while keeping `backend/requirements.txt` slim & Vercel-compatible.
+- **Fine-Tuning Pipeline**: Real gradient updates across **SFT**, **Instruction Tuning** (prompt token masking), **LoRA**, **QLoRA** (4-bit NF4 config), **DPO** (reference-policy log-ratio loss), and **GRPO** (group rollouts with verifiable rewards & KL penalty), gated by **LicenseGuard** compatibility enforcement.
+- **Isolated Training Job Manager**: Spawns isolated child training workers via `subprocess.Popen` (never in web request handlers) with priority scheduling, `pause`/`resume`/`cancel`/`recover`, live log tailing, and strict post-training checkpoint validation.
+- **Genuine Hardware Telemetry**: Real CPU, RAM, Disk, and GPU telemetry (`pynvml`, `nvidia-smi`, `torch.cuda`, `torch.backends.mps`, `psutil`); honestly reports `"GPU Unavailable"` on CPU hosts without simulation.
+- **Checkpoint Management**: Cryptographic SHA-256 digest verification, weight reload, NaN/Inf scan, forward-pass validation gate, SafeTensors release export (`EXPORT_MANIFEST.json`), and validated rollback.
+- **10-Dimension Comparative Benchmarks & Optimization**: Evaluates base vs. fine-tuned models across 10 core capabilities with 5-gram/SHA-256 **data leakage prevention**, regression gates, human preference ratings, and PyTorch `int8_dynamic` / `bf16` / `fp16` / `int4_nf4` TTFT, throughput, memory, context & batch scaling benchmarks.
+- **Independent OpenAI-Compatible Serving**: Dedicated `/v1/models`, `/v1/health`, `/v1/chat/completions` (JSON + SSE `[DONE]`), and `/v1/completions` endpoints with concurrency semaphores and token accounting. See [`TRAINING_INFRASTRUCTURE.md`](TRAINING_INFRASTRUCTURE.md).
+
 ---
 
 ## 🛠 Tech Stack
@@ -138,6 +147,8 @@ cd backend
 python -m venv .venv
 source .venv/bin/activate  # On Windows: .venv\Scripts\activate
 pip install -r requirements.txt
+# Optional: install PyTorch / Transformers / PEFT / TRL worker stack for NEXORA MODEL LAB
+# uv pip install -r requirements-training.txt
 alembic upgrade head
 uvicorn app.main:app --reload --port 8000
 ```
@@ -173,12 +184,13 @@ vercel
 
 ## 🧪 Automated Testing
 
-Run the complete 76-test backend test suite:
+Run the complete 83-test backend test suite:
 ```bash
 cd backend
 pytest -v
 ```
 **Test Suites Covered:**
+- `test_training_infra.py`: Hardware telemetry (`pynvml`/`nvidia-smi`/PyTorch/`psutil`), ML framework stack inspection & DeepSpeed/NeMo/PEFT configs, license compatibility guard, 10-dimension comparative benchmarks + 5-gram/SHA-256 data leakage prevention, isolated child worker fine-tuning (`lora` pause/resume/validation, `instruction`, `dpo`, `grpo`), SafeTensors checkpoint export/rollback, INT8 dynamic quantization + TTFT benchmarking, and OpenAI-compatible serving (`/v1/models`, `/v1/health`, `/v1/chat/completions`, `/v1/completions`).
 - `test_lab.py`: Foundation model registry, analytical parameter counter, RoPE rotary embeddings, RMSNorm, SwiGLU, cross-entropy loss, dataset NFKC normalization, PII scanning, deduplication, BPE tokenizer training and fertility, hardware profiling, and authentic training run execution.
 - `test_multimodal.py`: Image upload, OCR, screenshot analysis, video timestamp segmentation.
 - `test_voice.py`: Speech-to-text, text-to-speech generation, transcription endpoints.
